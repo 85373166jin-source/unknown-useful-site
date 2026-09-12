@@ -278,3 +278,16 @@ export async function listRecentLoginEvents(db: D1Database, since: number): Prom
     .all<LoginEventRow>();
   return result.results ?? [];
 }
+
+
+export interface LatestLoginRow {
+  user_id: string;
+  last_login_at: number;
+}
+
+export async function listLatestLoginEvents(db: D1Database): Promise<LatestLoginRow[]> {
+  const result = await db
+    .prepare('SELECT user_id, MAX(at) AS last_login_at FROM login_events GROUP BY user_id')
+    .all<LatestLoginRow>();
+  return result.results ?? [];
+}

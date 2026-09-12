@@ -17,15 +17,21 @@ export interface RevenuePoint {
   yuan: number;
 }
 
-export interface RevenueReport {
+export interface RevenueTotals {
   totalYuan: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
   series: RevenuePoint[];
 }
 
-export interface DashboardReport extends RevenueReport {
+export interface RevenueReport extends RevenueTotals {
+  range: RevenueRange;
+  seriesDays: number;
+}
+
+export interface DashboardReport extends RevenueTotals {
   confirmedRevenueYuan: number;
+  seriesDays: number;
   monthRevenueYuan: number;
   todayRevenueYuan: number;
   pendingAmountYuan: number;
@@ -81,6 +87,18 @@ function utcDateKey(timestamp: number): string {
   return `${date.getUTCFullYear()}-${month}-${day}`;
 }
 
+function rangeDays(range: RevenueRange): number {
+  return range === 'all' ? 30 : Number(range.slice(0, -1));
+}
+
+function rangeWindowStart(now: number, days: number): number {
+  return startOfUtcDay(now) - (days - 1) * MS_PER_DAY;
+}
+
+function rangeWindowEnd(now: number): number {
+  return startOfUtcDay(now) + MS_PER_DAY;
+}
+
 function trailingDaysSeries(claims: ApprovedPaymentClaimRow[], now: number, days: number): RevenuePoint[] {
   const todayStart = startOfUtcDay(now);
   const dayStarts = Array.from({ length: days }, (_, index) => todayStart - (days - 1 - index) * MS_PER_DAY);
@@ -109,17 +127,15 @@ function parseRevenueRange(value: string | undefined): RevenueRange {
   throw new ApiError('invalid_request', 'Range must be one of 7d, 30d, 90d, or all', 400);
 }
 
-function rangeStart(now: number, range: RevenueRange): number {
-  if (range === 'all') {
-    return 0;
-  }
-  const days = Number(range.slice(0, -1));
-  return now - days * MS_PER_DAY;
-}
-
 function filterByRange(claims: ApprovedPaymentClaimRow[], now: number, range: RevenueRange): ApprovedPaymentClaimRow[] {
-  const since = rangeStart(now, range);
-  return claims.filter((claim) => claim.paid_at >= since);
+  if (range === 'all') {
+    return claims;
+  }
+
+  const days = rangeDays(range);
+  const start = rangeWindowStart(now, days);
+  const end = rangeWindowEnd(now);
+  return claims.filter((claim) => claim.paid_at >= start && claim.paid_at < end);
 }
 
 export async function getRevenueReport(env: Env, rangeValue: string | undefined): Promise<RevenueReport> {
@@ -127,12 +143,15 @@ export async function getRevenueReport(env: Env, rangeValue: string | undefined)
   const now = Date.now();
   const claims = await listApprovedPaymentClaims(env.DB);
   const inRange = filterByRange(claims, now, range);
+  const seriesDays = rangeDays(range);
 
   return {
+    range,
+    seriesDays,
     totalYuan: sumConfirmedAmounts(inRange),
     byProduct: byProduct(inRange),
     byCategory: byCategory(inRange),
-    series: trailingDaysSeries(claims, now, range === 'all' ? 30 : Number(range.slice(0, -1)))
+    series: trailingDaysSeries(inRange, now, seriesDays)
   };
 }
 
@@ -155,6 +174,7 @@ export async function getDashboard(env: Env): Promise<DashboardReport> {
 
   return {
     confirmedRevenueYuan: sumConfirmedAmounts(claims),
+    seriesDays: 30,
     totalYuan: sumConfirmedAmounts(claims),
     monthRevenueYuan: sumConfirmedAmounts(monthClaims),
     todayRevenueYuan: sumConfirmedAmounts(todayClaims),
@@ -169,4 +189,3 @@ export async function getDashboard(env: Env): Promise<DashboardReport> {
     series: trailingDaysSeries(claims, now, 30)
   };
 }
-

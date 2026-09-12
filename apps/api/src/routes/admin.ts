@@ -9,6 +9,7 @@ import {
   findUserById,
   insertAdminEntitlement,
   listAllUsersForAdmin,
+  listLatestLoginEvents,
   listRecentLoginEvents,
   revokeUserEntitlement,
   updateUserStatus,
@@ -74,7 +75,11 @@ interface RiskInfo {
   riskLevel: RiskLevel;
   distinctIpCount: number;
   distinctCountryCount: number;
-  lastLoginAt: number | null;
+}
+
+interface LoginState {
+  riskMap: Map<string, RiskInfo>;
+  lastLoginMap: Map<string, number>;
 }
 
 interface AuditRow {
@@ -96,10 +101,14 @@ async function readJson(c: Context<AppEnv>): Promise<unknown> {
   }
 }
 
-async function buildRiskMap(env: AppEnv['Bindings']): Promise<Map<string, RiskInfo>> {
-  const events = await listRecentLoginEvents(env.DB, Date.now() - RISK_WINDOW_MS);
+async function buildLoginState(env: AppEnv['Bindings']): Promise<LoginState> {
+  const [recentEvents, latestLogins] = await Promise.all([
+    listRecentLoginEvents(env.DB, Date.now() - RISK_WINDOW_MS),
+    listLatestLoginEvents(env.DB)
+  ]);
+
   const eventsByUser = new Map<string, LoginEventRow[]>();
-  for (const event of events) {
+  for (const event of recentEvents) {
     const userEvents = eventsByUser.get(event.user_id) ?? [];
     userEvents.push(event);
     eventsByUser.set(event.user_id, userEvents);
@@ -117,18 +126,23 @@ async function buildRiskMap(env: AppEnv['Bindings']): Promise<Map<string, RiskIn
         }))
       ),
       distinctIpCount: new Set(userEvents.map((event) => event.ip_hash)).size,
-      distinctCountryCount: new Set(userEvents.map((event) => event.country)).size,
-      lastLoginAt: userEvents.reduce((latest, event) => Math.max(latest, event.at), 0)
+      distinctCountryCount: new Set(userEvents.map((event) => event.country)).size
     });
   }
 
-  return riskMap;
+  const lastLoginMap = new Map<string, number>();
+  for (const row of latestLogins) {
+    lastLoginMap.set(row.user_id, row.last_login_at);
+  }
+
+  return { riskMap, lastLoginMap };
 }
 
 function toAdminUserPayload(
   user: UserRow,
   entitlements: string[],
-  risk: RiskInfo | undefined
+  risk: RiskInfo | undefined,
+  lastLoginAt: number | null
 ): AdminUserPayload {
   return {
     id: user.id,
@@ -138,7 +152,7 @@ function toAdminUserPayload(
     phoneMask: user.phone_mask,
     emailMask: user.email_mask,
     createdAt: user.created_at,
-    lastLoginAt: risk?.lastLoginAt ?? null,
+    lastLoginAt,
     riskLevel: risk?.riskLevel ?? 'none',
     entitlements
   };
@@ -147,7 +161,8 @@ function toAdminUserPayload(
 function adminUserRowToPayload(
   row: AdminUserRow,
   entitlements: string[],
-  risk: RiskInfo | undefined
+  risk: RiskInfo | undefined,
+  lastLoginAt: number | null
 ): AdminUserPayload {
   return {
     id: row.id,
@@ -157,14 +172,14 @@ function adminUserRowToPayload(
     phoneMask: row.phone_mask,
     emailMask: row.email_mask,
     createdAt: row.created_at,
-    lastLoginAt: risk?.lastLoginAt ?? null,
+    lastLoginAt,
     riskLevel: risk?.riskLevel ?? 'none',
     entitlements
   };
 }
 
 async function listAdminUsers(env: AppEnv['Bindings']): Promise<AdminUserPayload[]> {
-  const [users, riskMap] = await Promise.all([listAllUsersForAdmin(env.DB), buildRiskMap(env)]);
+  const [users, loginState] = await Promise.all([listAllUsersForAdmin(env.DB), buildLoginState(env)]);
   const payloads: AdminUserPayload[] = [];
   for (const user of users) {
     const entitlements = await listActiveEntitlementsForUser(env.DB, user.id);
@@ -172,7 +187,8 @@ async function listAdminUsers(env: AppEnv['Bindings']): Promise<AdminUserPayload
       adminUserRowToPayload(
         user,
         entitlements.map((entitlement) => entitlement.product_id),
-        riskMap.get(user.id)
+        loginState.riskMap.get(user.id),
+        loginState.lastLoginMap.get(user.id) ?? null
       )
     );
   }
@@ -180,7 +196,7 @@ async function listAdminUsers(env: AppEnv['Bindings']): Promise<AdminUserPayload
 }
 
 async function listRiskUsers(env: AppEnv['Bindings']) {
-  const [users, riskMap] = await Promise.all([listAllUsersForAdmin(env.DB), buildRiskMap(env)]);
+  const [users, loginState] = await Promise.all([listAllUsersForAdmin(env.DB), buildLoginState(env)]);
   const usersById = new Map(users.map((user) => [user.id, user]));
   const risky: Array<{
     userId: string;
@@ -191,7 +207,7 @@ async function listRiskUsers(env: AppEnv['Bindings']) {
     lastLoginAt: number | null;
   }> = [];
 
-  for (const [userId, risk] of riskMap) {
+  for (const [userId, risk] of loginState.riskMap) {
     if (risk.riskLevel === 'none') {
       continue;
     }
@@ -205,7 +221,7 @@ async function listRiskUsers(env: AppEnv['Bindings']) {
       riskLevel: risk.riskLevel,
       distinctIpCount: risk.distinctIpCount,
       distinctCountryCount: risk.distinctCountryCount,
-      lastLoginAt: risk.lastLoginAt
+      lastLoginAt: loginState.lastLoginMap.get(userId) ?? null
     });
   }
 
@@ -283,14 +299,15 @@ async function requireTargetUser(env: AppEnv['Bindings'], userId: string): Promi
 }
 
 async function singleUserPayload(env: AppEnv['Bindings'], user: UserRow): Promise<AdminUserPayload> {
-  const [entitlements, riskMap] = await Promise.all([
+  const [entitlements, loginState] = await Promise.all([
     listActiveEntitlementsForUser(env.DB, user.id),
-    buildRiskMap(env)
+    buildLoginState(env)
   ]);
   return toAdminUserPayload(
     user,
     entitlements.map((entitlement) => entitlement.product_id),
-    riskMap.get(user.id)
+    loginState.riskMap.get(user.id),
+    loginState.lastLoginMap.get(user.id) ?? null
   );
 }
 
@@ -471,4 +488,3 @@ adminRoutes.delete('/users/:id/contact/:kind', bearerAuth, requireAdmin, async (
   const updated = await requireTargetUser(c.env, target.id);
   return c.json({ user: await singleUserPayload(c.env, updated) });
 });
-

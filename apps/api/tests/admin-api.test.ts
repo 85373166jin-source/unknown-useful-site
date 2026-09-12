@@ -45,6 +45,8 @@ type Dashboard = {
 };
 
 type Revenue = {
+  range: '7d' | '30d' | '90d' | 'all';
+  seriesDays: number;
   totalYuan: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
@@ -222,13 +224,44 @@ describe('admin reporting and user management API', () => {
     expect(response.status).toBe(200);
     const report = await response.json<Revenue>();
 
+    expect(report.range).toBe('30d');
+    expect(report.seriesDays).toBe(30);
     expect(report.totalYuan).toBe(49);
     expect(report.byProduct.bundle).toBe(49);
     expect(report.byProduct.super).toBe(0);
     expect(report.byProduct.anbu).toBe(0);
     expect(report.byCategory.courses).toBe(49);
+    expect(report.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(report.totalYuan);
   });
 
+  it('excludes claims older than the selected revenue range', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const { token } = await registerUser('alice');
+    const oldPaidAt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    const claim = await (await createClaim(token, claimForm({ paidAt: oldPaidAt }))).json<Claim>();
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve' });
+
+    const recent = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
+    expect(recent.status).toBe(200);
+    const recentBody = await recent.json<Revenue>();
+    expect(recentBody.totalYuan).toBe(0);
+    expect(recentBody.byProduct.bundle).toBe(0);
+    expect(recentBody.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(0);
+
+    const allTime = await app.request('/api/v1/admin/revenue?range=all', { headers: authHeaders(adminToken) }, env);
+    expect(allTime.status).toBe(200);
+    const allTimeBody = await allTime.json<Revenue>();
+    expect(allTimeBody.range).toBe('all');
+    expect(allTimeBody.seriesDays).toBe(30);
+    expect(allTimeBody.totalYuan).toBe(49);
+    expect(allTimeBody.byProduct.bundle).toBe(49);
+  });
+
+  it('rejects an unknown revenue range', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const response = await app.request('/api/v1/admin/revenue?range=year', { headers: authHeaders(adminToken) }, env);
+    await expectError(response, 400, 'invalid_request');
+  });
   it('counts pending claims in the dashboard before review', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');
@@ -273,7 +306,7 @@ describe('admin reporting and user management API', () => {
 
   it('forbids normal users from every admin endpoint', async () => {
     await seedCatalogAndAdmin();
-    const { token } = await registerUser('alice');
+    const { token, userId } = await registerUser('alice');
 
     const adminPaths = [
       '/api/v1/admin/dashboard',
@@ -292,6 +325,25 @@ describe('admin reporting and user management API', () => {
         method: 'PATCH',
         headers: jsonAuthHeaders(token),
         body: JSON.stringify({ status: 'disabled' })
+      }, env),
+      403,
+      'forbidden'
+    );
+
+    await expectError(
+      await app.request(`/api/v1/admin/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: jsonAuthHeaders(token),
+        body: JSON.stringify({ newPassword: 'replacement-password-123' })
+      }, env),
+      403,
+      'forbidden'
+    );
+
+    await expectError(
+      await app.request(`/api/v1/admin/users/${userId}/contact/email`, {
+        method: 'DELETE',
+        headers: authHeaders(token)
       }, env),
       403,
       'forbidden'
@@ -477,5 +529,22 @@ describe('admin reporting and user management API', () => {
     expect(auditBody.audits.length).toBeGreaterThan(0);
     expect(auditBody.audits.some((entry) => entry.action === 'auth.login')).toBe(true);
     expect(JSON.stringify(auditBody)).not.toContain('alice@example.com');
+  });
+  it('shows the real latest login even when it is outside the risk window', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const { userId } = await registerUser('alice');
+    const oldLoginAt = Date.now() - 25 * 60 * 60 * 1000;
+
+    await env.DB.prepare(
+      `INSERT INTO login_events (id, user_id, ip_hash, country, city, datacenter, risk_level, at)
+       VALUES (?, ?, 'old-ip-hash', 'CN', 'Shanghai', NULL, 'none', ?)`
+    ).bind(crypto.randomUUID(), userId, oldLoginAt).run();
+
+    const response = await app.request('/api/v1/admin/users', { headers: authHeaders(adminToken) }, env);
+    expect(response.status).toBe(200);
+    const body = await response.json<{ users: AdminUser[] }>();
+    const alice = body.users.find((user) => user.id === userId);
+    expect(alice?.lastLoginAt).toBe(oldLoginAt);
+    expect(alice?.riskLevel).toBe('none');
   });
 });
