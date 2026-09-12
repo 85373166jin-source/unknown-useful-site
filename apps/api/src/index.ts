@@ -9,6 +9,7 @@ import { catalogRoutes } from './routes/catalog';
 import { entitlementsRoutes } from './routes/entitlements';
 import { adminRoutes } from './routes/admin';
 import { ordersRoutes } from './routes/orders';
+import { progressRoutes } from './routes/progress';
 
 for (const product of Object.values(CATALOG.products)) {
   ProductSchema.parse(product);
@@ -36,7 +37,7 @@ const corsMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     c.header('Access-Control-Allow-Origin', origin);
     c.header('Vary', 'Origin');
     c.header('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    c.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
   }
 
   if (c.req.method === 'OPTIONS') {
@@ -57,6 +58,7 @@ app.route('/api/v1/auth', authRoutes);
 app.route('/api/v1/catalog', catalogRoutes);
 app.route('/api/v1/entitlements', entitlementsRoutes);
 app.route('/api/v1/orders', ordersRoutes);
+app.route('/api/v1/progress', progressRoutes);
 app.route('/api/v1/admin', adminRoutes);
 
 export default app;

@@ -5,6 +5,7 @@ import { AuthPage } from '../features/auth/AuthPage';
 import { PaymentClaimPage } from '../features/checkout/PaymentClaimPage';
 import { HomePage } from '../features/catalog/HomePage';
 import { CoursePage } from '../features/courses/CoursePage';
+import { LessonPage } from '../features/courses/LessonPage';
 import { StaticContentPage } from '../features/content/StaticContentPage';
 import { AuthProvider } from '../lib/auth-context';
 import { PublicApp } from './PublicApp';
@@ -30,6 +31,14 @@ export function PublicRoutes() {
             <Route path="/about" element={<StaticContentPage pageKey="about" />} />
             <Route path="/contact" element={<StaticContentPage pageKey="contact" />} />
             <Route path="/courses/fire-shadow" element={<CoursePage />} />
+            <Route
+              path="/learn/:seriesId/:lessonId"
+              element={
+                <ProtectedRoute>
+                  <LessonPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/payment-claim"
               element={

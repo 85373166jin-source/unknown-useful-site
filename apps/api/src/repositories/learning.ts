@@ -88,3 +88,82 @@ export async function listActiveEntitlementsForUser(
 
   return result.results ?? [];
 }
+
+export interface LessonRow {
+  id: string;
+  series_id: string;
+  title: string;
+  media_path: string;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface WatchProgressRow {
+  user_id: string;
+  lesson_id: string;
+  position_seconds: number;
+  duration_seconds: number;
+  completed: number;
+  created_at: number;
+  updated_at: number;
+}
+
+const LESSON_COLUMNS = 'id, series_id, title, media_path, sort_order, created_at, updated_at';
+const WATCH_PROGRESS_COLUMNS =
+  'user_id, lesson_id, position_seconds, duration_seconds, completed, created_at, updated_at';
+
+export async function findLessonById(db: D1Database, lessonId: string): Promise<LessonRow | null> {
+  return db
+    .prepare(`SELECT ${LESSON_COLUMNS} FROM lessons WHERE id = ?`)
+    .bind(lessonId)
+    .first<LessonRow>();
+}
+
+export async function findWatchProgress(
+  db: D1Database,
+  userId: string,
+  lessonId: string
+): Promise<WatchProgressRow | null> {
+  return db
+    .prepare(`SELECT ${WATCH_PROGRESS_COLUMNS} FROM watch_progress WHERE user_id = ? AND lesson_id = ?`)
+    .bind(userId, lessonId)
+    .first<WatchProgressRow>();
+}
+
+export interface UpsertWatchProgressInput {
+  userId: string;
+  lessonId: string;
+  positionSeconds: number;
+  durationSeconds: number;
+  completed: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function upsertWatchProgress(
+  db: D1Database,
+  input: UpsertWatchProgressInput
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO watch_progress
+        (user_id, lesson_id, position_seconds, duration_seconds, completed, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+        position_seconds = excluded.position_seconds,
+        duration_seconds = excluded.duration_seconds,
+        completed = excluded.completed,
+        updated_at = excluded.updated_at`
+    )
+    .bind(
+      input.userId,
+      input.lessonId,
+      input.positionSeconds,
+      input.durationSeconds,
+      input.completed ? 1 : 0,
+      input.createdAt,
+      input.updatedAt
+    )
+    .run();
+}
