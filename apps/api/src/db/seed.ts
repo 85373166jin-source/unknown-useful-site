@@ -1,14 +1,9 @@
 import { CATALOG } from '@site/contracts';
 import type { Env } from '../env';
+import { PRODUCT_SORT_ORDER } from '../services/catalog';
 
 type ProductId = keyof typeof CATALOG.products;
 type SeriesId = keyof typeof CATALOG.series;
-
-const PRODUCT_SORT_ORDER: Record<ProductId, number> = {
-  super: 1,
-  bundle: 2,
-  anbu: 3
-};
 
 const SERIES_PASSWORD_BINDING = {
   super: 'SUPER_COURSE_PASSWORD_HASH',
