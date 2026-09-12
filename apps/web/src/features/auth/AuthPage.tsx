@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 
@@ -7,6 +7,10 @@ export type AuthPageMode = 'login' | 'register' | 'recover';
 
 export interface AuthPageProps {
   mode: AuthPageMode;
+}
+
+interface AuthLocationState {
+  notice?: string;
 }
 
 const RISK_WARNINGS_KEY = 'unknown-useful-site.risk-warnings';
@@ -45,6 +49,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   const { login, register, recover } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +58,10 @@ export function AuthPage({ mode }: AuthPageProps) {
   const [contact, setContact] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(() => {
+    const state = location.state as AuthLocationState | null;
+    return state?.notice ?? null;
+  });
   const [riskWarning, setRiskWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pendingTarget = useRef('/account');
@@ -235,3 +243,4 @@ export function AuthPage({ mode }: AuthPageProps) {
     </section>
   );
 }
+

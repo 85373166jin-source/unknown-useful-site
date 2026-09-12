@@ -75,6 +75,7 @@ interface AuthContextValue {
   register: (input: RegisterInput) => Promise<void>;
   recover: (input: RecoverInput) => Promise<void>;
   logout: () => Promise<void>;
+  clearSession: () => void;
   refresh: () => Promise<AuthUser | null>;
   updateAccount: (input: AccountPatchInput) => Promise<AuthUser>;
 }
@@ -96,6 +97,7 @@ const defaultAuthContext: AuthContextValue = {
   logout: async () => {
     throw new Error('AuthProvider is not mounted');
   },
+  clearSession: () => undefined,
   refresh: async () => null,
   updateAccount: async () => {
     throw new Error('AuthProvider is not mounted');
@@ -200,6 +202,11 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     }
   }, []);
 
+  const clearSession = useCallback((): void => {
+    clearSessionToken();
+    setUser(null);
+  }, []);
+
   const updateAccount = useCallback(async (input: AccountPatchInput): Promise<AuthUser> => {
     const payload = await apiFetch<UserPayload>('/auth/account', {
       method: 'PATCH',
@@ -210,8 +217,8 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, register, recover, logout, refresh, updateAccount }),
-    [user, loading, login, register, recover, logout, refresh, updateAccount]
+    () => ({ user, loading, login, register, recover, logout, clearSession, refresh, updateAccount }),
+    [user, loading, login, register, recover, logout, clearSession, refresh, updateAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

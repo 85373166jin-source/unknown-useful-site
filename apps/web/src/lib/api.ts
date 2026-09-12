@@ -1,7 +1,7 @@
 export const SESSION_STORAGE_KEY = 'unknown-useful-site.session';
 export const AUTH_EXPIRED_EVENT = 'auth-expired';
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '');
 
 export interface ApiErrorPayload {
   error?: {
@@ -26,6 +26,15 @@ export class ApiError extends Error {
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
 };
+
+export function apiUrl(path: string, base = API_BASE_URL): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const normalizedBase = base.replace(/\/+$/, '');
+  if (!normalizedBase) {
+    return normalizedPath;
+  }
+  return `${normalizedBase}${normalizedPath}`;
+}
 
 export function getSessionToken(): string | null {
   if (typeof window === 'undefined') {
@@ -99,8 +108,7 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     }
   }
 
-  const url = path.startsWith('/') ? `${API_BASE_URL}${path}` : `${API_BASE_URL}/${path}`;
-  const response = await fetch(url, request);
+  const response = await fetch(apiUrl(path), request);
   const payload = await readJson(response);
 
   if (response.status === 401) {

@@ -8,7 +8,7 @@ function formatCreatedAt(timestamp: number): string {
 }
 
 export function AccountPage() {
-  const { user, logout, updateAccount } = useAuth();
+  const { user, logout, updateAccount, clearSession } = useAuth();
   const navigate = useNavigate();
 
   const [newPassword, setNewPassword] = useState('');
@@ -29,11 +29,13 @@ export function AccountPage() {
     setBusy(true);
     try {
       await updateAccount({ newPassword });
-      setNewPassword('');
-      setNotice('密码已更新');
+      clearSession();
+      navigate('/login', {
+        replace: true,
+        state: { notice: '密码已更新，请重新登录' }
+      });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
-    } finally {
       setBusy(false);
     }
   }
