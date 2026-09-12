@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { CATALOG, type Lesson } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
 
 const SAVE_INTERVAL_MS = 120_000;
 const RESUME_RATIO = 0.95;
@@ -15,6 +16,7 @@ interface ProgressPayload {
 }
 
 interface PendingProgress {
+  userId: string;
   lessonId: string;
   positionSeconds: number;
   durationSeconds: number;
@@ -53,18 +55,34 @@ function writeQueue(queue: PendingProgress[]): void {
 export function LessonPage() {
   const params = useParams();
   const lesson = findLesson(params.seriesId, params.lessonId);
+  const { user } = useAuth();
+  const userId = user?.id ?? '';
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lessonIdRef = useRef(params.lessonId ?? '');
+  const positionRef = useRef(0);
+  const durationRef = useRef(0);
   const savedProgressRef = useRef<ProgressPayload | null>(null);
   const flushingRef = useRef(false);
 
-  const enqueue = useCallback((item: PendingProgress) => {
-    const queue = readQueue().filter((entry) => entry.lessonId !== item.lessonId);
-    queue.push(item);
-    writeQueue(queue);
-  }, []);
+  const enqueue = useCallback(
+    (item: Omit<PendingProgress, 'userId'>) => {
+      if (!userId) {
+        return;
+      }
+      const queue = readQueue().filter(
+        (entry) => !(entry.userId === userId && entry.lessonId === item.lessonId)
+      );
+      queue.push({ ...item, userId });
+      writeQueue(queue);
+    },
+    [userId]
+  );
 
   const flushQueue = useCallback(async () => {
+    if (!userId) {
+      return;
+    }
     if (flushingRef.current) {
       return;
     }
@@ -74,12 +92,14 @@ export function LessonPage() {
         return;
       }
       const queue = readQueue();
-      if (queue.length === 0) {
+      const mine = queue.filter((entry) => entry.userId === userId);
+      if (mine.length === 0) {
         return;
       }
+      const others = queue.filter((entry) => entry.userId !== userId);
 
       const remaining: PendingProgress[] = [];
-      for (const item of queue) {
+      for (const item of mine) {
         try {
           await apiFetch(`/progress/${item.lessonId}`, {
             method: 'PUT',
@@ -92,16 +112,28 @@ export function LessonPage() {
           remaining.push(item);
         }
       }
-      writeQueue(remaining);
+      writeQueue([...others, ...remaining]);
     } finally {
       flushingRef.current = false;
+    }
+  }, [userId]);
+
+  const captureVideoState = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    if (Number.isFinite(video.currentTime)) {
+      positionRef.current = video.currentTime;
+    }
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      durationRef.current = video.duration;
     }
   }, []);
 
   const save = useCallback(async () => {
-    const video = videoRef.current;
-    const position = video ? video.currentTime : 0;
-    const duration = video && Number.isFinite(video.duration) ? video.duration : 0;
+    const position = positionRef.current;
+    const duration = durationRef.current;
     if (!Number.isFinite(duration) || duration <= 0) {
       return;
     }
@@ -146,17 +178,26 @@ export function LessonPage() {
       saved.positionSeconds / saved.durationSeconds < RESUME_RATIO
     ) {
       video.currentTime = saved.positionSeconds;
+      positionRef.current = saved.positionSeconds;
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        durationRef.current = video.duration;
+      } else {
+        durationRef.current = saved.durationSeconds;
+      }
     }
   }, []);
 
   useEffect(() => {
     lessonIdRef.current = params.lessonId ?? '';
+    positionRef.current = 0;
+    durationRef.current = 0;
     return () => {
       void save();
     };
   }, [params.lessonId, save]);
 
   useEffect(() => {
+    savedProgressRef.current = null;
     if (!lesson) {
       return;
     }
@@ -171,7 +212,9 @@ export function LessonPage() {
         applyResume();
       })
       .catch(() => {
-        // Keep playback at the start when progress cannot be loaded.
+        if (!cancelled) {
+          savedProgressRef.current = null;
+        }
       });
 
     return () => {
@@ -195,36 +238,55 @@ export function LessonPage() {
       return;
     }
 
-    const handleLoadedMetadata = () => applyResume();
-    const handlePause = () => void save();
-    const handleEnded = () => void save();
+    const handleLoadedMetadata = () => {
+      captureVideoState();
+      applyResume();
+    };
+    const handleDurationChange = () => captureVideoState();
+    const handleTimeUpdate = () => captureVideoState();
+    const handlePause = () => {
+      captureVideoState();
+      void save();
+    };
+    const handleEnded = () => {
+      captureVideoState();
+      void save();
+    };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('durationchange', handleDurationChange);
+    video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('durationchange', handleDurationChange);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [lesson, applyResume, save]);
+  }, [lesson, applyResume, captureVideoState, save]);
 
   useEffect(() => {
     if (!lesson) {
       return;
     }
     const intervalId = window.setInterval(() => {
+      captureVideoState();
       void save();
     }, SAVE_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [lesson, save]);
+  }, [lesson, captureVideoState, save]);
 
   useEffect(() => {
-    const handlePageHide = () => void save();
+    const handlePageHide = () => {
+      captureVideoState();
+      void save();
+    };
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
-  }, [save]);
+  }, [captureVideoState, save]);
 
   if (!lesson) {
     return (
@@ -259,5 +321,3 @@ export function LessonPage() {
     </section>
   );
 }
-
-

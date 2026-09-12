@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CATALOG, type Series } from '@site/contracts';
 import { ApiError, apiFetch, getSessionToken } from '../../lib/api';
 
@@ -137,6 +137,15 @@ export function CoursePage() {
                   </button>
                 </div>
               ) : null}
+              {unlocked.includes(series.id) && series.lessons.length > 0 ? (
+                <div className="course-series__lessons">
+                  {series.lessons.map((lesson) => (
+                    <Link key={lesson.id} to={`/learn/${series.id}/${lesson.id}`}>
+                      {lesson.title}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
             </article>
           );
         })}
@@ -183,3 +192,4 @@ export function CoursePage() {
     </section>
   );
 }
+
