@@ -6,6 +6,7 @@ import type { AppEnv } from './middleware/auth';
 import { errorHandler } from './middleware/error';
 import { authRoutes } from './routes/auth';
 import { catalogRoutes } from './routes/catalog';
+import { entitlementsRoutes } from './routes/entitlements';
 
 for (const product of Object.values(CATALOG.products)) {
   ProductSchema.parse(product);
@@ -52,5 +53,6 @@ app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } 
 app.get('/api/v1/health', (c) => c.json({ ok: true }));
 app.route('/api/v1/auth', authRoutes);
 app.route('/api/v1/catalog', catalogRoutes);
+app.route('/api/v1/entitlements', entitlementsRoutes);
 
 export default app;
