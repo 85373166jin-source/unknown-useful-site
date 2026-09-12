@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CATALOG, type ProductId } from '@site/contracts';
-import { ApiError, apiFetch, apiUrl, getSessionToken } from '../../lib/api';
+import { AUTH_EXPIRED_EVENT, ApiError, apiFetch, apiUrl, clearSessionToken, getSessionToken } from '../../lib/api';
 
 type OrderStatus = 'pending' | 'approved' | 'rejected';
 
@@ -54,6 +54,10 @@ async function loadScreenshot(orderNo: string): Promise<string> {
   }
 
   const response = await fetch(apiUrl(`/admin/orders/${orderNo}/screenshot`), { headers });
+  if (response.status === 401) {
+    clearSessionToken();
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
   if (!response.ok) {
     throw new ApiError(`http_${response.status}`, '截图加载失败', response.status);
   }
@@ -139,7 +143,7 @@ export function AdminOrders() {
     setError(null);
     setBusy(true);
     try {
-      await apiFetch(`/admin/orders/${selectedOrder.id}/review`, {
+      await apiFetch(`/admin/orders/${selectedOrder.orderNo}/review`, {
         method: 'PATCH',
         body:
           decision === 'approve'
