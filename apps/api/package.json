@@ -10,8 +10,8 @@
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "db:seed:local": "wrangler d1 execute DB --local --command=\"SELECT 'seed is implemented in Task 3'\"",
-    "db:seed:remote": "wrangler d1 execute DB --remote --command=\"SELECT 'seed is implemented in Task 3'\""
+    "db:seed:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/seed-local.ps1",
+    "db:seed:remote": "wrangler d1 execute DB --remote --command=\"SELECT 'Remote seeding runs through the seed Worker; see Task 13.'\""
   },
   "dependencies": {
     "@site/contracts": "*",

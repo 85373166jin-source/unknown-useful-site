@@ -11,3 +11,6 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "SCREENSHOTS"
 bucket_name = "unknown-useful-site-screenshots"
+
+[vars]
+ADMIN_USERNAME = "admin"
