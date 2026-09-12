@@ -205,3 +205,52 @@ export async function insertOrderEntitlement(
     .bind(crypto.randomUUID(), input.userId, input.productId, input.orderId, input.createdAt)
     .run();
 }
+
+
+export interface ApprovedPaymentClaimRow {
+  id: string;
+  user_id: string;
+  product_id: string;
+  list_amount_yuan: number;
+  actual_amount_yuan: number | null;
+  confirmed_amount_yuan: number;
+  paid_at: number;
+  reviewed_at: number | null;
+  category_id: string;
+}
+
+export interface PendingPaymentClaimSummary {
+  count: number;
+  totalYuan: number;
+}
+
+export async function listApprovedPaymentClaims(
+  db: D1Database
+): Promise<ApprovedPaymentClaimRow[]> {
+  const result = await db
+    .prepare(
+      `SELECT pc.id, pc.user_id, pc.product_id, pc.list_amount_yuan, pc.actual_amount_yuan,
+              COALESCE(pc.actual_amount_yuan, pc.list_amount_yuan) AS confirmed_amount_yuan,
+              pc.paid_at, pc.reviewed_at, p.category_id
+       FROM payment_claims pc
+       JOIN products p ON p.id = pc.product_id
+       WHERE pc.status = 'approved'
+       ORDER BY pc.paid_at`
+    )
+    .all<ApprovedPaymentClaimRow>();
+  return result.results ?? [];
+}
+
+export async function getPendingPaymentClaimSummary(
+  db: D1Database
+): Promise<PendingPaymentClaimSummary> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS count, COALESCE(SUM(list_amount_yuan), 0) AS total
+       FROM payment_claims
+       WHERE status = 'pending'`
+    )
+    .first<{ count: number; total: number }>();
+
+  return { count: row?.count ?? 0, totalYuan: row?.total ?? 0 };
+}

@@ -183,3 +183,98 @@ export async function unbindUserContact(
   await buildUnbindUserContactStatement(db, userId, kind, updatedAt).run();
   return findUserById(db, userId);
 }
+
+
+export interface AdminUserRow {
+  id: string;
+  username: string;
+  role: UserRole;
+  status: UserStatus;
+  phone_mask: string | null;
+  email_mask: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface LoginEventRow {
+  user_id: string;
+  ip_hash: string;
+  country: string;
+  city: string;
+  at: number;
+}
+
+const ADMIN_USER_COLUMNS = 'id, username, role, status, phone_mask, email_mask, created_at, updated_at';
+
+export async function listAllUsersForAdmin(db: D1Database): Promise<AdminUserRow[]> {
+  const result = await db
+    .prepare(`SELECT ${ADMIN_USER_COLUMNS} FROM users ORDER BY created_at`)
+    .all<AdminUserRow>();
+  return result.results ?? [];
+}
+
+export async function countUsers(db: D1Database): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS count FROM users').first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+export async function countUsersCreatedSince(db: D1Database, since: number): Promise<number> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS count FROM users WHERE created_at >= ?')
+    .bind(since)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+export async function updateUserStatus(
+  db: D1Database,
+  userId: string,
+  status: UserStatus,
+  updatedAt: number
+): Promise<void> {
+  await db.prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').bind(
+    status,
+    updatedAt,
+    userId
+  ).run();
+}
+
+export async function insertAdminEntitlement(
+  db: D1Database,
+  userId: string,
+  productId: string,
+  createdAt: number
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO entitlements (id, user_id, product_id, status, source, created_at)
+       VALUES (?, ?, ?, 'active', 'admin', ?)
+       ON CONFLICT(user_id, product_id) WHERE status = 'active' DO NOTHING`
+    )
+    .bind(crypto.randomUUID(), userId, productId, createdAt)
+    .run();
+}
+
+export async function revokeUserEntitlement(
+  db: D1Database,
+  userId: string,
+  productId: string
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE entitlements SET status = 'revoked'
+       WHERE user_id = ? AND product_id = ? AND status = 'active'`
+    )
+    .bind(userId, productId)
+    .run();
+}
+
+export async function listRecentLoginEvents(db: D1Database, since: number): Promise<LoginEventRow[]> {
+  const result = await db
+    .prepare(
+      'SELECT user_id, ip_hash, country, city, at FROM login_events WHERE at >= ? ORDER BY at'
+    )
+    .bind(since)
+    .all<LoginEventRow>();
+  return result.results ?? [];
+}
