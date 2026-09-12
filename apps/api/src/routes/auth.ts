@@ -51,12 +51,9 @@ async function readJson(c: Context<AppEnv>): Promise<unknown> {
 
 function requestLocation(c: Context<AppEnv>): { ip: string; country: string; city: string } {
   const raw = c.req.raw as Request & { cf?: { country?: string; city?: string } };
-  const ip =
-    c.req.header('cf-connecting-ip') ??
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-    'unknown';
-  const country = raw.cf?.country ?? c.req.header('cf-ipcountry') ?? 'ZZ';
-  const city = raw.cf?.city ?? c.req.header('cf-ipcity') ?? 'unknown';
+  const ip = c.req.header('cf-connecting-ip') ?? 'local';
+  const country = raw.cf?.country ?? 'ZZ';
+  const city = raw.cf?.city ?? 'local';
   return { ip, country, city };
 }
 

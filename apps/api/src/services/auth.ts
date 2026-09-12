@@ -1,19 +1,23 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
 import {
-  bindUserContact,
-  createUser,
+  buildBindUserContactStatement,
+  buildInsertUserStatement,
+  buildUnbindUserContactStatement,
+  buildUpdateUserPasswordStatement,
   findUserByContactHmac,
   findUserById,
   findUserByUsername,
-  unbindUserContact,
-  updateUserPassword,
   type ContactKind,
   type UserRole,
   type UserRow
 } from '../repositories/users';
-import { deleteAllSessionsForUser, revokeSessionByTokenHash, createSession } from '../repositories/sessions';
+import {
+  buildDeleteAllSessionsStatement,
+  buildInsertSessionStatement,
+  revokeSessionByTokenHash
+} from '../repositories/sessions';
 import { hmacContact, maskEmail, maskPhone, normalizeEmail, normalizePhone } from './contact';
 import { hashPassword, verifyPassword } from './password';
 import { issueSessionToken, sessionExpiresAt } from './session';
@@ -103,6 +107,15 @@ function assertValidPassword(password: string): void {
   }
 }
 
+function isValidEmail(value: string): boolean {
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@') || at === value.length - 1) {
+    return false;
+  }
+  const domain = value.slice(at + 1);
+  return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.');
+}
+
 function optionalContactValue(value: string | undefined): string | null {
   if (value === undefined) {
     return null;
@@ -111,10 +124,30 @@ function optionalContactValue(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-async function createAuthSession(env: Env, userId: string): Promise<{ token: string }> {
-  const now = Date.now();
+function mapUniqueConstraintError(error: unknown): never {
+  if (!(error instanceof Error)) {
+    throw error;
+  }
+
+  const match = error.message.match(/UNIQUE constraint failed: users\.([A-Za-z_]+)/i);
+  const field = match?.[1];
+  if (field === 'username') {
+    throw new ApiError('duplicate_username', 'Username is already taken', 409);
+  }
+  if (field === 'phone_hmac' || field === 'email_hmac') {
+    throw new ApiError('duplicate_contact', 'Contact is already bound to another account', 409);
+  }
+
+  throw error;
+}
+
+async function issueSession(
+  env: Env,
+  userId: string,
+  now: number
+): Promise<{ token: string; statement: D1PreparedStatement }> {
   const issued = await issueSessionToken(env.SESSION_PEPPER);
-  await createSession(env.DB, {
+  const statement = buildInsertSessionStatement(env.DB, {
     tokenHash: issued.tokenHash,
     userId,
     deviceSummary: null,
@@ -122,7 +155,25 @@ async function createAuthSession(env: Env, userId: string): Promise<{ token: str
     lastSeenAt: now,
     expiresAt: sessionExpiresAt(now)
   });
-  return { token: issued.token };
+  return { token: issued.token, statement };
+}
+
+function buildInsertLoginEventStatement(
+  db: D1Database,
+  input: { userId: string; ipHash: string; country: string; city: string; riskLevel: RiskLevel; at: number }
+): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO login_events (id, user_id, ip_hash, country, city, datacenter, risk_level, at)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`
+  ).bind(
+    crypto.randomUUID(),
+    input.userId,
+    input.ipHash,
+    input.country,
+    input.city,
+    input.riskLevel,
+    input.at
+  );
 }
 
 async function listLoginSignals(db: D1Database, userId: string, since: number): Promise<LoginSignal[]> {
@@ -140,26 +191,6 @@ async function listLoginSignals(db: D1Database, userId: string, since: number): 
   }));
 }
 
-async function insertLoginEvent(
-  db: D1Database,
-  input: { userId: string; ipHash: string; country: string; city: string; riskLevel: RiskLevel; at: number }
-): Promise<void> {
-  await db.prepare(
-    `INSERT INTO login_events (id, user_id, ip_hash, country, city, datacenter, risk_level, at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`
-  )
-    .bind(
-      crypto.randomUUID(),
-      input.userId,
-      input.ipHash,
-      input.country,
-      input.city,
-      input.riskLevel,
-      input.at
-    )
-    .run();
-}
-
 export async function register(env: Env, input: RegisterInput): Promise<AuthSession> {
   const username = input.username.trim();
   assertValidUsername(username);
@@ -173,9 +204,13 @@ export async function register(env: Env, input: RegisterInput): Promise<AuthSess
   if (phoneValue && !phone) {
     throw new ApiError('invalid_phone', 'Phone must be a valid Chinese mobile number');
   }
+
   const email = emailValue ? normalizeEmail(emailValue) : null;
   if (emailValue && !email) {
     throw new ApiError('invalid_email', 'Email must not be empty');
+  }
+  if (email && !isValidEmail(email)) {
+    throw new ApiError('invalid_email', 'Email must include @ and a valid domain');
   }
 
   const existingUsername = await findUserByUsername(env.DB, username);
@@ -200,26 +235,40 @@ export async function register(env: Env, input: RegisterInput): Promise<AuthSess
   }
 
   const passwordHash = await hashPassword(input.password);
-  const user = await createUser(env.DB, {
-    id: crypto.randomUUID(),
-    username,
-    passwordHash,
-    role: 'user',
-    phone: {
-      hmac: phoneHmac,
-      mask: phone ? maskPhone(phone) : null,
-      boundAt: phone ? now : null
-    },
-    email: {
-      hmac: emailHmac,
-      mask: email ? maskEmail(email) : null,
-      boundAt: email ? now : null
-    },
-    createdAt: now,
-    updatedAt: now
-  });
+  const userId = crypto.randomUUID();
+  const session = await issueSession(env, userId, now);
 
-  const session = await createAuthSession(env, user.id);
+  try {
+    await env.DB.batch([
+      buildInsertUserStatement(env.DB, {
+        id: userId,
+        username,
+        passwordHash,
+        role: 'user',
+        phone: {
+          hmac: phoneHmac,
+          mask: phone ? maskPhone(phone) : null,
+          boundAt: phone ? now : null
+        },
+        email: {
+          hmac: emailHmac,
+          mask: email ? maskEmail(email) : null,
+          boundAt: email ? now : null
+        },
+        createdAt: now,
+        updatedAt: now
+      }),
+      session.statement
+    ]);
+  } catch (error) {
+    mapUniqueConstraintError(error);
+  }
+
+  const user = await findUserById(env.DB, userId);
+  if (!user) {
+    throw new ApiError('internal_error', 'Account creation failed', 500);
+  }
+
   await recordAudit(env, {
     actorUserId: user.id,
     action: 'auth.register',
@@ -267,17 +316,25 @@ export async function login(env: Env, input: LoginInput): Promise<LoginResult> {
     at: now
   };
   const riskLevel = classifyLoginRisk([...previousSignals, currentSignal]);
+  const session = await issueSession(env, user.id, now);
 
-  await deleteAllSessionsForUser(env.DB, user.id);
-  const session = await createAuthSession(env, user.id);
-  await insertLoginEvent(env.DB, {
-    userId: user.id,
-    ipHash,
-    country: input.country,
-    city: input.city,
-    riskLevel,
-    at: now
-  });
+  try {
+    await env.DB.batch([
+      buildDeleteAllSessionsStatement(env.DB, user.id),
+      session.statement,
+      buildInsertLoginEventStatement(env.DB, {
+        userId: user.id,
+        ipHash,
+        country: input.country,
+        city: input.city,
+        riskLevel,
+        at: now
+      })
+    ]);
+  } catch (error) {
+    mapUniqueConstraintError(error);
+  }
+
   await recordAudit(env, {
     actorUserId: user.id,
     action: 'auth.login',
@@ -325,6 +382,9 @@ export async function recover(env: Env, input: RecoverInput): Promise<void> {
   if (!normalized) {
     throw new ApiError('invalid_contact', 'Contact must be a valid phone or email', 400);
   }
+  if (kind === 'email' && !isValidEmail(normalized)) {
+    throw new ApiError('invalid_contact', 'Contact must be a valid phone or email', 400);
+  }
 
   const user = await findUserByUsername(env.DB, username);
   if (!user) {
@@ -338,8 +398,15 @@ export async function recover(env: Env, input: RecoverInput): Promise<void> {
   }
 
   const passwordHash = await hashPassword(input.newPassword);
-  await updateUserPassword(env.DB, user.id, passwordHash, now);
-  await deleteAllSessionsForUser(env.DB, user.id);
+  try {
+    await env.DB.batch([
+      buildUpdateUserPasswordStatement(env.DB, user.id, passwordHash, now),
+      buildDeleteAllSessionsStatement(env.DB, user.id)
+    ]);
+  } catch (error) {
+    mapUniqueConstraintError(error);
+  }
+
   await recordAudit(env, {
     actorUserId: user.id,
     action: 'auth.recover',
@@ -374,58 +441,71 @@ export async function updateAccount(
   const before = { phoneMask: user.phone_mask, emailMask: user.email_mask };
   const passwordHash = input.newPassword !== undefined ? await hashPassword(input.newPassword) : null;
 
-  let clearPhone = false;
-  let phoneHmac: string | null = null;
-  let phoneMask: string | null = null;
+  const statements: D1PreparedStatement[] = [];
+  if (passwordHash) {
+    statements.push(buildUpdateUserPasswordStatement(env.DB, userId, passwordHash, now));
+    statements.push(buildDeleteAllSessionsStatement(env.DB, userId));
+  }
+
   if (input.phone !== undefined) {
     if (input.phone.trim() === '') {
-      clearPhone = true;
+      statements.push(buildUnbindUserContactStatement(env.DB, userId, 'phone', now));
     } else {
       const normalized = normalizePhone(input.phone);
       if (!normalized) {
         throw new ApiError('invalid_phone', 'Phone must be a valid Chinese mobile number');
       }
-      phoneHmac = await hmacContact(normalized, env.CONTACT_HMAC_SECRET);
+      const phoneHmac = await hmacContact(normalized, env.CONTACT_HMAC_SECRET);
       const owner = await findUserByContactHmac(env.DB, 'phone', phoneHmac);
       if (owner && owner.id !== userId) {
         throw new ApiError('duplicate_contact', 'Phone is already bound to another account', 409);
       }
-      phoneMask = maskPhone(normalized);
+      statements.push(
+        buildBindUserContactStatement(
+          env.DB,
+          userId,
+          'phone',
+          { hmac: phoneHmac, mask: maskPhone(normalized), boundAt: now },
+          now
+        )
+      );
     }
   }
 
-  let clearEmail = false;
-  let emailHmac: string | null = null;
-  let emailMask: string | null = null;
   if (input.email !== undefined) {
     if (input.email.trim() === '') {
-      clearEmail = true;
+      statements.push(buildUnbindUserContactStatement(env.DB, userId, 'email', now));
     } else {
       const normalized = normalizeEmail(input.email);
       if (!normalized) {
         throw new ApiError('invalid_email', 'Email must not be empty');
       }
-      emailHmac = await hmacContact(normalized, env.CONTACT_HMAC_SECRET);
+      if (!isValidEmail(normalized)) {
+        throw new ApiError('invalid_email', 'Email must include @ and a valid domain');
+      }
+      const emailHmac = await hmacContact(normalized, env.CONTACT_HMAC_SECRET);
       const owner = await findUserByContactHmac(env.DB, 'email', emailHmac);
       if (owner && owner.id !== userId) {
         throw new ApiError('duplicate_contact', 'Email is already bound to another account', 409);
       }
-      emailMask = maskEmail(normalized);
+      statements.push(
+        buildBindUserContactStatement(
+          env.DB,
+          userId,
+          'email',
+          { hmac: emailHmac, mask: maskEmail(normalized), boundAt: now },
+          now
+        )
+      );
     }
   }
 
-  if (passwordHash) {
-    await updateUserPassword(env.DB, userId, passwordHash, now);
-  }
-  if (clearPhone) {
-    await unbindUserContact(env.DB, userId, 'phone', now);
-  } else if (phoneHmac && phoneMask) {
-    await bindUserContact(env.DB, userId, 'phone', { hmac: phoneHmac, mask: phoneMask, boundAt: now }, now);
-  }
-  if (clearEmail) {
-    await unbindUserContact(env.DB, userId, 'email', now);
-  } else if (emailHmac && emailMask) {
-    await bindUserContact(env.DB, userId, 'email', { hmac: emailHmac, mask: emailMask, boundAt: now }, now);
+  if (statements.length > 0) {
+    try {
+      await env.DB.batch(statements);
+    } catch (error) {
+      mapUniqueConstraintError(error);
+    }
   }
 
   const updated = await findUserById(env.DB, userId);
@@ -453,7 +533,15 @@ export async function deleteContact(env: Env, userId: string, kind: ContactKind)
   }
 
   const before = kind === 'phone' ? user.phone_mask : user.email_mask;
-  const updated = await unbindUserContact(env.DB, userId, kind, now);
+  const updated = await (async () => {
+    try {
+      await env.DB.batch([buildUnbindUserContactStatement(env.DB, userId, kind, now)]);
+    } catch (error) {
+      mapUniqueConstraintError(error);
+    }
+    return findUserById(env.DB, userId);
+  })();
+
   if (!updated) {
     throw new ApiError('unauthorized', 'Account is not available', 401);
   }

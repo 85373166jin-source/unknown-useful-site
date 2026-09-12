@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 
 export interface SessionRow {
   token_hash: string;
@@ -19,20 +19,40 @@ export interface CreateSessionInput {
   expiresAt: number;
 }
 
-export async function createSession(db: D1Database, input: CreateSessionInput): Promise<void> {
-  await db.prepare(
+export function buildInsertSessionStatement(
+  db: D1Database,
+  input: CreateSessionInput
+): D1PreparedStatement {
+  return db.prepare(
     `INSERT INTO sessions (token_hash, user_id, device_summary, created_at, last_seen_at, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      input.tokenHash,
-      input.userId,
-      input.deviceSummary,
-      input.createdAt,
-      input.lastSeenAt,
-      input.expiresAt
-    )
-    .run();
+  ).bind(
+    input.tokenHash,
+    input.userId,
+    input.deviceSummary,
+    input.createdAt,
+    input.lastSeenAt,
+    input.expiresAt
+  );
+}
+
+export function buildDeleteAllSessionsStatement(db: D1Database, userId: string): D1PreparedStatement {
+  return db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId);
+}
+
+export function buildRevokeSessionByTokenHashStatement(
+  db: D1Database,
+  tokenHash: string,
+  now: number
+): D1PreparedStatement {
+  return db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL').bind(
+    now,
+    tokenHash
+  );
+}
+
+export async function createSession(db: D1Database, input: CreateSessionInput): Promise<void> {
+  await buildInsertSessionStatement(db, input).run();
 }
 
 export async function findActiveSessionByTokenHash(
@@ -55,9 +75,7 @@ export async function revokeSessionByTokenHash(
   tokenHash: string,
   now: number
 ): Promise<void> {
-  await db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
-    .bind(now, tokenHash)
-    .run();
+  await buildRevokeSessionByTokenHashStatement(db, tokenHash, now).run();
 }
 
 /**
@@ -66,5 +84,5 @@ export async function revokeSessionByTokenHash(
  * index would count them and block the replacement session being created next.
  */
 export async function deleteAllSessionsForUser(db: D1Database, userId: string): Promise<void> {
-  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  await buildDeleteAllSessionsStatement(db, userId).run();
 }

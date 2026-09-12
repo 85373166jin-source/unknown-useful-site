@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 
 export type UserRole = 'user' | 'admin';
 export type UserStatus = 'active' | 'disabled';
@@ -57,6 +57,76 @@ export interface CreateUserInput {
   updatedAt: number;
 }
 
+export function buildInsertUserStatement(db: D1Database, input: CreateUserInput): D1PreparedStatement {
+  return db.prepare(
+    `INSERT INTO users (
+      id, username, password_hash, role, status,
+      phone_hmac, phone_mask, phone_bound_at,
+      email_hmac, email_mask, email_bound_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    input.id,
+    input.username,
+    input.passwordHash,
+    input.role,
+    input.phone.hmac,
+    input.phone.mask,
+    input.phone.boundAt,
+    input.email.hmac,
+    input.email.mask,
+    input.email.boundAt,
+    input.createdAt,
+    input.updatedAt
+  );
+}
+
+export function buildUpdateUserPasswordStatement(
+  db: D1Database,
+  userId: string,
+  passwordHash: string,
+  updatedAt: number
+): D1PreparedStatement {
+  return db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').bind(
+    passwordHash,
+    updatedAt,
+    userId
+  );
+}
+
+export function buildBindUserContactStatement(
+  db: D1Database,
+  userId: string,
+  kind: ContactKind,
+  contact: ContactRecord,
+  updatedAt: number
+): D1PreparedStatement {
+  if (kind === 'phone') {
+    return db.prepare(
+      'UPDATE users SET phone_hmac = ?, phone_mask = ?, phone_bound_at = ?, phone_verified_at = NULL, updated_at = ? WHERE id = ?'
+    ).bind(contact.hmac, contact.mask, contact.boundAt, updatedAt, userId);
+  }
+  return db.prepare(
+    'UPDATE users SET email_hmac = ?, email_mask = ?, email_bound_at = ?, email_verified_at = NULL, updated_at = ? WHERE id = ?'
+  ).bind(contact.hmac, contact.mask, contact.boundAt, updatedAt, userId);
+}
+
+export function buildUnbindUserContactStatement(
+  db: D1Database,
+  userId: string,
+  kind: ContactKind,
+  updatedAt: number
+): D1PreparedStatement {
+  if (kind === 'phone') {
+    return db.prepare(
+      'UPDATE users SET phone_hmac = NULL, phone_mask = NULL, phone_bound_at = NULL, phone_verified_at = NULL, updated_at = ? WHERE id = ?'
+    ).bind(updatedAt, userId);
+  }
+  return db.prepare(
+    'UPDATE users SET email_hmac = NULL, email_mask = NULL, email_bound_at = NULL, email_verified_at = NULL, updated_at = ? WHERE id = ?'
+  ).bind(updatedAt, userId);
+}
+
 export async function findUserByUsername(db: D1Database, username: string): Promise<UserRow | null> {
   return db.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE username = ?`).bind(username).first<UserRow>();
 }
@@ -75,29 +145,7 @@ export async function findUserByContactHmac(
 }
 
 export async function createUser(db: D1Database, input: CreateUserInput): Promise<UserRow> {
-  await db.prepare(
-    `INSERT INTO users (
-      id, username, password_hash, role, status,
-      phone_hmac, phone_mask, phone_bound_at,
-      email_hmac, email_mask, email_bound_at,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      input.id,
-      input.username,
-      input.passwordHash,
-      input.role,
-      input.phone.hmac,
-      input.phone.mask,
-      input.phone.boundAt,
-      input.email.hmac,
-      input.email.mask,
-      input.email.boundAt,
-      input.createdAt,
-      input.updatedAt
-    )
-    .run();
+  await buildInsertUserStatement(db, input).run();
 
   const created = await findUserById(db, input.id);
   if (!created) {
@@ -112,9 +160,7 @@ export async function updateUserPassword(
   passwordHash: string,
   updatedAt: number
 ): Promise<void> {
-  await db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
-    .bind(passwordHash, updatedAt, userId)
-    .run();
+  await buildUpdateUserPasswordStatement(db, userId, passwordHash, updatedAt).run();
 }
 
 export async function bindUserContact(
@@ -124,19 +170,7 @@ export async function bindUserContact(
   contact: ContactRecord,
   updatedAt: number
 ): Promise<UserRow | null> {
-  if (kind === 'phone') {
-    await db.prepare(
-      'UPDATE users SET phone_hmac = ?, phone_mask = ?, phone_bound_at = ?, phone_verified_at = NULL, updated_at = ? WHERE id = ?'
-    )
-      .bind(contact.hmac, contact.mask, contact.boundAt, updatedAt, userId)
-      .run();
-  } else {
-    await db.prepare(
-      'UPDATE users SET email_hmac = ?, email_mask = ?, email_bound_at = ?, email_verified_at = NULL, updated_at = ? WHERE id = ?'
-    )
-      .bind(contact.hmac, contact.mask, contact.boundAt, updatedAt, userId)
-      .run();
-  }
+  await buildBindUserContactStatement(db, userId, kind, contact, updatedAt).run();
   return findUserById(db, userId);
 }
 
@@ -146,18 +180,6 @@ export async function unbindUserContact(
   kind: ContactKind,
   updatedAt: number
 ): Promise<UserRow | null> {
-  if (kind === 'phone') {
-    await db.prepare(
-      'UPDATE users SET phone_hmac = NULL, phone_mask = NULL, phone_bound_at = NULL, phone_verified_at = NULL, updated_at = ? WHERE id = ?'
-    )
-      .bind(updatedAt, userId)
-      .run();
-  } else {
-    await db.prepare(
-      'UPDATE users SET email_hmac = NULL, email_mask = NULL, email_bound_at = NULL, email_verified_at = NULL, updated_at = ? WHERE id = ?'
-    )
-      .bind(updatedAt, userId)
-      .run();
-  }
+  await buildUnbindUserContactStatement(db, userId, kind, updatedAt).run();
   return findUserById(db, userId);
 }

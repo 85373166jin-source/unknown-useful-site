@@ -102,11 +102,22 @@ describe('authentication API', () => {
     await expectError(await registerUser({ username: 'alice', password: 'short' }), 400, 'invalid_password');
   });
 
+
   it('validates optional phone and email values during registration', async () => {
     await expectError(
       await registerUser({ username: 'alice', password: 'long-password-123', phone: 'not-a-phone' }),
       400,
       'invalid_phone'
+    );
+    await expectError(
+      await registerUser({ username: 'alice', password: 'long-password-123', email: 'not-an-email' }),
+      400,
+      'invalid_email'
+    );
+    await expectError(
+      await registerUser({ username: 'alice', password: 'long-password-123', email: 'alice@example' }),
+      400,
+      'invalid_email'
     );
   });
 
@@ -127,6 +138,23 @@ describe('authentication API', () => {
       409,
       'duplicate_contact'
     );
+  });
+
+  it('maps concurrent duplicate registration to a structured conflict', async () => {
+    const responses = await Promise.all([
+      registerUser({ username: 'alice', password: 'long-password-123', email: 'alice@example.com' }),
+      registerUser({ username: 'alice', password: 'long-password-123', email: 'alice@example.com' })
+    ]);
+
+    const statuses = responses.map((response) => response.status).sort((a, b) => a - b);
+    expect(statuses).toEqual([201, 409]);
+
+    for (const response of responses) {
+      if (response.status === 409) {
+        const body = (await response.json()) as ErrorBody;
+        expect(['duplicate_username', 'duplicate_contact']).toContain(body.error.code);
+      }
+    }
   });
 
   it('stores only hashed passwords and masked contact values', async () => {
@@ -246,6 +274,21 @@ describe('authentication API', () => {
     expect(login.status).toBe(200);
   });
 
+  it('rejects an invalid email on the recovery path', async () => {
+    await registerUser({ username: 'alice', password: 'long-password-123', email: 'alice@example.com' });
+
+    await expectError(
+      await recoverUser({ username: 'alice', contact: 'not-an-email', newPassword: 'new-password-456' }),
+      400,
+      'invalid_contact'
+    );
+    await expectError(
+      await recoverUser({ username: 'alice', contact: 'alice@example', newPassword: 'new-password-456' }),
+      400,
+      'invalid_contact'
+    );
+  });
+
   it('requires an exact username and matching contact for recovery', async () => {
     await registerUser({ username: 'alice', password: 'long-password-123', phone: '13800000000' });
 
@@ -283,10 +326,35 @@ describe('authentication API', () => {
     expect(body.user.phoneMask).toBe('139****0000');
     expect(body.user.emailMask).toBe('al***@example.com');
 
+    await expectError(
+      await app.request('/api/v1/auth/me', { headers: authHeaders(first.token) }, env),
+      401,
+      'unauthorized'
+    );
+
     await expectError(await loginUser({ username: 'alice', password: 'old-password-123' }), 401, 'invalid_credentials');
 
     const login = await loginUser({ username: 'alice', password: 'new-password-456' });
     expect(login.status).toBe(200);
+  });
+
+  it('rejects an invalid email through the account patch endpoint', async () => {
+    const register = await registerUser({ username: 'alice', password: 'long-password-123' });
+    const first = (await register.json()) as { token: string };
+
+    await expectError(
+      await app.request(
+        '/api/v1/auth/account',
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(first.token), ...JSON_HEADERS },
+          body: JSON.stringify({ email: 'not-an-email' })
+        },
+        env
+      ),
+      400,
+      'invalid_email'
+    );
   });
 
   it('rejects binding a contact that already belongs to another account', async () => {
@@ -474,6 +542,24 @@ describe('authentication API', () => {
     expect(denied.headers.get('access-control-allow-origin')).toBeNull();
   });
 
+  it('treats a missing ALLOWED_ORIGINS binding as an empty allow-list', async () => {
+    const response = await app.request('/api/v1/health', {}, {});
+    expect(response.status).toBe(200);
+  });
+
+  it('ignores spoofable forwarding headers for login risk identity', async () => {
+    await registerUser({ username: 'alice', password: 'long-password-123' });
+
+    const first = await loginUser({ username: 'alice', password: 'long-password-123' }, { 'x-forwarded-for': '203.0.113.1' });
+    expect(((await first.json()) as { riskLevel: string }).riskLevel).toBe('none');
+
+    const second = await loginUser({ username: 'alice', password: 'long-password-123' }, { 'x-forwarded-for': '203.0.113.2' });
+    expect(((await second.json()) as { riskLevel: string }).riskLevel).toBe('none');
+
+    const third = await loginUser({ username: 'alice', password: 'long-password-123' }, { 'x-forwarded-for': '203.0.113.3' });
+    expect(((await third.json()) as { riskLevel: string }).riskLevel).toBe('none');
+  });
+
   it('answers CORS preflight for configured origins', async () => {
     const preflight = await app.request(
       '/api/v1/auth/account',
@@ -534,3 +620,4 @@ describe('authentication API', () => {
     await expectError(await app.request('/api/v1/unknown', {}, env), 404, 'not_found');
   });
 });
+

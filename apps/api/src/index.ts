@@ -14,7 +14,10 @@ for (const series of Object.values(CATALOG.series)) {
   SeriesSchema.parse(series);
 }
 
-function parseAllowedOrigins(value: string): string[] {
+function parseAllowedOrigins(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
   return value
     .split(',')
     .map((origin) => origin.trim())
