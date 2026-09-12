@@ -2,7 +2,14 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+function resolveBasePath(value: string | undefined): string {
+  const trimmed = (value ?? '/').trim();
+  const withLeading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`;
+}
+
 export default defineConfig({
+  base: resolveBasePath(process.env.VITE_BASE_PATH),
   appType: 'mpa',
   plugins: [react()],
   server: {
