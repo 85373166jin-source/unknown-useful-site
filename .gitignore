@@ -1,0 +1,9 @@
+.superpowers/
+node_modules/
+dist/
+.wrangler/
+.env
+.env.*
+!.env.example
+work/
+outputs/
