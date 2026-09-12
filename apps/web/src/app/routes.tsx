@@ -2,6 +2,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { AccountPage } from '../features/account/AccountPage';
 import { AuthPage } from '../features/auth/AuthPage';
+import { PaymentClaimPage } from '../features/checkout/PaymentClaimPage';
 import { HomePage } from '../features/catalog/HomePage';
 import { CoursePage } from '../features/courses/CoursePage';
 import { StaticContentPage } from '../features/content/StaticContentPage';
@@ -29,6 +30,14 @@ export function PublicRoutes() {
             <Route path="/about" element={<StaticContentPage pageKey="about" />} />
             <Route path="/contact" element={<StaticContentPage pageKey="contact" />} />
             <Route path="/courses/fire-shadow" element={<CoursePage />} />
+            <Route
+              path="/payment-claim"
+              element={
+                <ProtectedRoute>
+                  <PaymentClaimPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/purchase-help" element={<StaticContentPage pageKey="purchase-help" />} />
             <Route path="/terms" element={<StaticContentPage pageKey="terms" />} />
             <Route path="/privacy" element={<StaticContentPage pageKey="privacy" />} />

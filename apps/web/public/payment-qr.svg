@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+  <rect width="320" height="320" fill="#ffffff" />
+  <rect x="24" y="24" width="272" height="272" rx="12" fill="none" stroke="#1a202c" stroke-width="4" />
+  <rect x="52" y="52" width="64" height="64" fill="none" stroke="#1a202c" stroke-width="6" />
+  <rect x="204" y="52" width="64" height="64" fill="none" stroke="#1a202c" stroke-width="6" />
+  <rect x="52" y="204" width="64" height="64" fill="none" stroke="#1a202c" stroke-width="6" />
+  <path d="M188 204h16v16h-16zm32 0h16v16h-16zm-16 32h16v16h-16zm32 0h16v16h-16z" fill="#1a202c" />
+  <path d="M84 84h16v16H84zm0 32h16v16H84zm0 64h16v16H84zm0 32h16v16H84zm32 0h16v16h-16z" fill="#1a202c" />
+  <path d="M236 84h16v16h-16zm-32 32h16v16h-16zm32 32h16v16h-16z" fill="#1a202c" />
+  <text x="160" y="152" text-anchor="middle" font-family="sans-serif" font-size="26" fill="#d33">收款码占位</text>
+  <text x="160" y="184" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">请替换为真实收款码</text>
+</svg>

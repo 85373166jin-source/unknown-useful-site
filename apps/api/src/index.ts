@@ -7,6 +7,8 @@ import { errorHandler } from './middleware/error';
 import { authRoutes } from './routes/auth';
 import { catalogRoutes } from './routes/catalog';
 import { entitlementsRoutes } from './routes/entitlements';
+import { adminRoutes } from './routes/admin';
+import { ordersRoutes } from './routes/orders';
 
 for (const product of Object.values(CATALOG.products)) {
   ProductSchema.parse(product);
@@ -54,5 +56,7 @@ app.get('/api/v1/health', (c) => c.json({ ok: true }));
 app.route('/api/v1/auth', authRoutes);
 app.route('/api/v1/catalog', catalogRoutes);
 app.route('/api/v1/entitlements', entitlementsRoutes);
+app.route('/api/v1/orders', ordersRoutes);
+app.route('/api/v1/admin', adminRoutes);
 
 export default app;

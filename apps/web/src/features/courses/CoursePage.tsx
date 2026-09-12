@@ -132,7 +132,7 @@ export function CoursePage() {
                   <button type="button" onClick={() => openUnlock(series)}>
                     使用课程密码观看
                   </button>
-                  <button type="button" onClick={() => navigate('/purchase-help')}>
+                  <button type="button" onClick={() => navigate(`/payment-claim?productId=${series.id}`)}>
                     购买课程
                   </button>
                 </div>
