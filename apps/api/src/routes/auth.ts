@@ -1,0 +1,122 @@
+import { Hono, type Context } from 'hono';
+import { z } from 'zod';
+import type { AppEnv } from '../middleware/auth';
+import { bearerAuth } from '../middleware/auth';
+import { ApiError } from '../middleware/error';
+import {
+  deleteContact,
+  getPublicUser,
+  login,
+  logout,
+  recover,
+  register,
+  updateAccount
+} from '../services/auth';
+
+const registerSchema = z.object({
+  username: z.string(),
+  password: z.string(),
+  phone: z.string().optional(),
+  email: z.string().optional()
+});
+
+const loginSchema = z.object({
+  username: z.string(),
+  password: z.string()
+});
+
+const recoverSchema = z.object({
+  username: z.string(),
+  contact: z.string(),
+  newPassword: z.string()
+});
+
+const accountPatchSchema = z.object({
+  newPassword: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional()
+});
+
+const contactDeleteSchema = z.object({
+  kind: z.enum(['phone', 'email'])
+});
+
+async function readJson(c: Context<AppEnv>): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    throw new ApiError('invalid_json', 'Request body must be valid JSON', 400);
+  }
+}
+
+function requestLocation(c: Context<AppEnv>): { ip: string; country: string; city: string } {
+  const raw = c.req.raw as Request & { cf?: { country?: string; city?: string } };
+  const ip =
+    c.req.header('cf-connecting-ip') ??
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+    'unknown';
+  const country = raw.cf?.country ?? c.req.header('cf-ipcountry') ?? 'ZZ';
+  const city = raw.cf?.city ?? c.req.header('cf-ipcity') ?? 'unknown';
+  return { ip, country, city };
+}
+
+export const authRoutes = new Hono<AppEnv>();
+
+authRoutes.post('/register', async (c) => {
+  const parsed = registerSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const result = await register(c.env, parsed.data);
+  return c.json(result, 201);
+});
+
+authRoutes.post('/login', async (c) => {
+  const parsed = loginSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const result = await login(c.env, { ...parsed.data, ...requestLocation(c) });
+  return c.json(result, 200);
+});
+
+authRoutes.post('/logout', bearerAuth, async (c) => {
+  await logout(c.env, c.get('sessionTokenHash'), c.get('userId'));
+  return c.json({ ok: true });
+});
+
+authRoutes.get('/me', bearerAuth, async (c) => {
+  return c.json({ user: await getPublicUser(c.env, c.get('userId')) });
+});
+
+authRoutes.post('/recover', async (c) => {
+  const parsed = recoverSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  await recover(c.env, { ...parsed.data, ip: requestLocation(c).ip });
+  return c.json({ ok: true });
+});
+
+authRoutes.patch('/account', bearerAuth, async (c) => {
+  const parsed = accountPatchSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const user = await updateAccount(c.env, c.get('userId'), parsed.data);
+  return c.json({ user });
+});
+
+authRoutes.delete('/account/contact', bearerAuth, async (c) => {
+  const parsed = contactDeleteSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const user = await deleteContact(c.env, c.get('userId'), parsed.data.kind);
+  return c.json({ user });
+});
