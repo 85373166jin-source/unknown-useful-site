@@ -6,6 +6,9 @@ import { LessonPage } from './LessonPage';
 
 type FetchCall = [string, RequestInit | undefined];
 
+const SESSION_STORAGE_KEY = 'unknown-useful-site.session';
+const PENDING_QUEUE_KEY = 'unknown-useful-site.progress-queue';
+
 const TEST_USER_1: AuthUser = {
   id: 'user-1',
   username: 'alice',
@@ -69,7 +72,11 @@ function putCallsFor(fetchMock: { mock: { calls: unknown[] } }, lessonId: string
 }
 
 function queueItems(): Array<Record<string, unknown>> {
-  return JSON.parse(window.localStorage.getItem('unknown-useful-site.progress-queue') ?? '[]');
+  return JSON.parse(window.localStorage.getItem(PENDING_QUEUE_KEY) ?? '[]');
+}
+
+function seedQueue(items: Array<Record<string, unknown>>): void {
+  window.localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(items));
 }
 
 afterEach(() => {
@@ -215,6 +222,70 @@ describe('LessonPage', () => {
     expect(putCallsFor(fetchMock, 'super-01')).toHaveLength(0);
     expect(queueItems()).toHaveLength(1);
     expect(queueItems()[0]).toMatchObject({ userId: 'user-1', lessonId: 'super-01' });
+  });
+
+  it('flushes the current user own queued progress when online', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'token-user-1');
+    seedQueue([
+      { userId: 'user-1', lessonId: 'super-01', positionSeconds: 300, durationSeconds: 1000, queuedAt: 1 }
+    ]);
+
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ positionSeconds: 0, durationSeconds: 0, completed: false })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderLesson(['/learn/super/super-01'], TEST_USER_1);
+    await screen.findByText('第 1 课');
+
+    await waitFor(() => {
+      expect(putCallsFor(fetchMock, 'super-01').length).toBe(1);
+    });
+    await waitFor(() => {
+      expect(queueItems()).toHaveLength(0);
+    });
+  });
+
+  it('aborts a multi-item flush when the token changes mid-flight', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'token-user-1');
+    seedQueue([
+      { userId: 'user-1', lessonId: 'super-01', positionSeconds: 100, durationSeconds: 1000, queuedAt: 1 },
+      { userId: 'user-1', lessonId: 'super-02', positionSeconds: 200, durationSeconds: 1000, queuedAt: 2 }
+    ]);
+
+    let resolveFirstPut!: (response: Response) => void;
+    const firstPut = new Promise<Response>((resolve) => {
+      resolveFirstPut = resolve;
+    });
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === 'PUT' && url.includes('/progress/super-01')) {
+        return firstPut;
+      }
+      return Promise.resolve(
+        jsonResponse({ positionSeconds: 0, durationSeconds: 0, completed: false })
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderLesson(['/learn/super/super-01'], TEST_USER_1);
+    await screen.findByText('第 1 课');
+
+    await waitFor(() => {
+      expect(putCallsFor(fetchMock, 'super-01').length).toBe(1);
+    });
+
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'token-user-2');
+    resolveFirstPut(jsonResponse({ positionSeconds: 100, durationSeconds: 1000, completed: false }));
+
+    await waitFor(() => {
+      const queue = queueItems();
+      expect(queue).toHaveLength(1);
+      expect(queue[0]).toMatchObject({ userId: 'user-1', lessonId: 'super-02' });
+    });
+
+    expect(putCallsFor(fetchMock, 'super-02')).toHaveLength(0);
   });
 
   it('does not resume a new lesson from a previous lesson cached progress', async () => {

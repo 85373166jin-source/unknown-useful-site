@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { CATALOG, type Lesson } from '@site/contracts';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError, apiFetch, getSessionToken } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 
 const SAVE_INTERVAL_MS = 120_000;
@@ -64,42 +64,54 @@ export function LessonPage() {
   const durationRef = useRef(0);
   const savedProgressRef = useRef<ProgressPayload | null>(null);
   const flushingRef = useRef(false);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
-  const enqueue = useCallback(
-    (item: Omit<PendingProgress, 'userId'>) => {
-      if (!userId) {
-        return;
-      }
-      const queue = readQueue().filter(
-        (entry) => !(entry.userId === userId && entry.lessonId === item.lessonId)
-      );
-      queue.push({ ...item, userId });
-      writeQueue(queue);
-    },
-    [userId]
-  );
-
-  const flushQueue = useCallback(async () => {
-    if (!userId) {
+  const enqueue = useCallback((item: Omit<PendingProgress, 'userId'>) => {
+    const currentUserId = userIdRef.current;
+    if (!currentUserId) {
       return;
     }
+    const queue = readQueue().filter(
+      (entry) => !(entry.userId === currentUserId && entry.lessonId === item.lessonId)
+    );
+    queue.push({ ...item, userId: currentUserId });
+    writeQueue(queue);
+  }, []);
+
+  const flushQueue = useCallback(async () => {
     if (flushingRef.current) {
       return;
     }
+    const startedUserId = userIdRef.current;
+    const startedToken = getSessionToken();
+    if (!startedUserId || !startedToken) {
+      return;
+    }
+
     flushingRef.current = true;
     try {
       if (!window.navigator.onLine) {
         return;
       }
       const queue = readQueue();
-      const mine = queue.filter((entry) => entry.userId === userId);
+      const mine = queue.filter((entry) => entry.userId === startedUserId);
       if (mine.length === 0) {
         return;
       }
-      const others = queue.filter((entry) => entry.userId !== userId);
+      const others = queue.filter((entry) => entry.userId !== startedUserId);
 
       const remaining: PendingProgress[] = [];
-      for (const item of mine) {
+      for (let index = 0; index < mine.length; index += 1) {
+        if (getSessionToken() !== startedToken || userIdRef.current !== startedUserId) {
+          remaining.push(...mine.slice(index));
+          break;
+        }
+
+        const item = mine[index];
+        if (!item) {
+          break;
+        }
         try {
           await apiFetch(`/progress/${item.lessonId}`, {
             method: 'PUT',
@@ -112,11 +124,12 @@ export function LessonPage() {
           remaining.push(item);
         }
       }
+
       writeQueue([...others, ...remaining]);
     } finally {
       flushingRef.current = false;
     }
-  }, [userId]);
+  }, []);
 
   const captureVideoState = useCallback(() => {
     const video = videoRef.current;
@@ -321,3 +334,4 @@ export function LessonPage() {
     </section>
   );
 }
+
