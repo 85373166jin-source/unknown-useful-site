@@ -1,0 +1,13 @@
+name = "unknown-useful-site-api"
+compatibility_date = "2026-09-12"
+main = "src/index.ts"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "unknown_useful_site_db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "unknown-useful-site-screenshots"
