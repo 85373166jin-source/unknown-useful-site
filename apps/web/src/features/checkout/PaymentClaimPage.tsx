@@ -3,8 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { CATALOG, type Product, type ProductId } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
-const PRODUCT_IDS = Object.keys(CATALOG.products) as ProductId[];
-const PRODUCTS = PRODUCT_IDS.map((id) => CATALOG.products[id]);
+const CLAIMABLE_PRODUCTS = (Object.keys(CATALOG.products) as ProductId[])
+  .map((id) => CATALOG.products[id])
+  .filter((product) => product.status !== 'coming_soon');
+
+const CLAIMABLE_PRODUCT_IDS = new Set<ProductId>(CLAIMABLE_PRODUCTS.map((product) => product.id));
 
 interface ClaimPayload {
   orderNo: string;
@@ -19,7 +22,7 @@ function toLocalDateTimeInputValue(date: Date): string {
 }
 
 function validInitialProductId(value: string | null): ProductId {
-  if (value && (PRODUCT_IDS as string[]).includes(value)) {
+  if (value && CLAIMABLE_PRODUCT_IDS.has(value as ProductId)) {
     return value as ProductId;
   }
   return 'bundle';
@@ -113,7 +116,7 @@ export function PaymentClaimPage() {
               value={productId}
               onChange={(event) => setProductId(event.target.value as ProductId)}
             >
-              {PRODUCTS.map((product: Product) => (
+              {CLAIMABLE_PRODUCTS.map((product: Product) => (
                 <option key={product.id} value={product.id}>
                   {product.title}（{product.priceYuan} 元）
                 </option>
@@ -165,3 +168,4 @@ export function PaymentClaimPage() {
     </section>
   );
 }
+

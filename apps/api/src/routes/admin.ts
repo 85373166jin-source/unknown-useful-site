@@ -4,6 +4,7 @@ import type { AppEnv } from '../middleware/auth';
 import { bearerAuth, requireAdmin } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
 import {
+  getPaymentClaimScreenshot,
   listPaymentClaims,
   reviewPaymentClaim,
   toPaymentClaimPayload
@@ -34,6 +35,13 @@ adminRoutes.get('/orders', bearerAuth, requireAdmin, async (c) => {
   return c.json({ orders: claims.map(toPaymentClaimPayload) });
 });
 
+adminRoutes.get('/orders/:orderNo/screenshot', bearerAuth, requireAdmin, async (c) => {
+  const screenshot = await getPaymentClaimScreenshot(c.env, c.req.param('orderNo'));
+  c.header('Content-Type', screenshot.contentType);
+  c.header('Cache-Control', 'private, no-store');
+  return c.body(screenshot.body);
+});
+
 adminRoutes.patch('/orders/:id/review', bearerAuth, requireAdmin, async (c) => {
   const parsed = reviewSchema.safeParse(await readJson(c));
   if (!parsed.success) {
@@ -43,3 +51,4 @@ adminRoutes.patch('/orders/:id/review', bearerAuth, requireAdmin, async (c) => {
   const claim = await reviewPaymentClaim(c.env, c.get('userId'), c.req.param('id'), parsed.data);
   return c.json(toPaymentClaimPayload(claim));
 });
+

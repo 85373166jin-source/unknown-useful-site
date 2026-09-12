@@ -182,14 +182,14 @@ describe('payment claims API', () => {
     expect(claim.orderNo).toMatch(/^HY-\d{8}-[A-Z0-9]{4}$/);
     expect(claim.status).toBe('pending');
     expect(claim.listAmountYuan).toBe(49);
-    expect(claim.screenshotKey).toMatch(/^payment-claims\//);
+    expect(claim).not.toHaveProperty('screenshotKey');
 
     const stored = await env.DB.prepare(
       `SELECT screenshot_key FROM payment_claims WHERE order_no = ?`
     )
       .bind(claim.orderNo)
       .first<{ screenshot_key: string }>();
-    expect(stored?.screenshot_key).toBe(claim.screenshotKey);
+    expect(stored?.screenshot_key).toMatch(/^payment-claims\//);
     expect(await env.SCREENSHOTS.head(stored!.screenshot_key)).not.toBeNull();
   });
 
@@ -284,7 +284,7 @@ describe('payment claims API', () => {
     const aliceToken = await registerUser('alice');
     const bobToken = await registerUser('bob');
     await createClaim(aliceToken, claimForm({ productId: 'super', contactText: 'alice@example.com' }));
-    await createClaim(bobToken, claimForm({ productId: 'anbu', contactText: 'bob@example.com' }));
+    await createClaim(bobToken, claimForm({ productId: 'bundle', contactText: 'bob@example.com' }));
 
     const mine = await app.request('/api/v1/orders/mine', { headers: authHeaders(aliceToken) }, env);
     expect(mine.status).toBe(200);
@@ -336,6 +336,64 @@ describe('payment claims API', () => {
     const created = await createClaim(token);
     expect(created.status).toBe(409);
     await expect(created.json()).resolves.toMatchObject({ error: { code: 'already_owned' } });
+  });
+
+  it('streams the private screenshot only to admins with the stored content type and bytes', async () => {
+    const token = await registerUser('alice');
+    const adminToken = await seedAdmin();
+    const claim = await (await createClaim(token)).json<Claim>();
+
+    const userResponse = await app.request(
+      `/api/v1/admin/orders/${claim.orderNo}/screenshot`,
+      { headers: authHeaders(token) },
+      env
+    );
+    expect(userResponse.status).toBe(403);
+
+    const missing = await app.request(
+      '/api/v1/admin/orders/HY-20260101-ABCD/screenshot',
+      { headers: authHeaders(adminToken) },
+      env
+    );
+    expect(missing.status).toBe(404);
+
+    const response = await app.request(
+      `/api/v1/admin/orders/${claim.orderNo}/screenshot`,
+      { headers: authHeaders(adminToken) },
+      env
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(bytes)).toEqual([1, 2, 3]);
+  });
+
+  it('redacts contact text and screenshot keys from order audit logs', async () => {
+    const token = await registerUser('alice');
+    const adminToken = await seedAdmin();
+    const claim = await (await createClaim(token, claimForm({ contactText: 'alice@example.com' }))).json<Claim>();
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountYuan: 49 });
+
+    const rows = await env.DB.prepare(
+      `SELECT before_json, after_json FROM audit_logs WHERE entity_type = 'payment_claim'`
+    ).all<{ before_json: string; after_json: string }>();
+    expect(rows.results?.length).toBeGreaterThan(0);
+
+    for (const row of rows.results ?? []) {
+      expect(row.before_json).not.toContain('alice@example.com');
+      expect(row.before_json).not.toContain('payment-claims/');
+      expect(row.after_json).not.toContain('alice@example.com');
+      expect(row.after_json).not.toContain('payment-claims/');
+    }
+  });
+
+  it('rejects individual anbu claims because the product is coming soon', async () => {
+    const token = await registerUser('alice');
+    const created = await createClaim(token, claimForm({ productId: 'anbu' }));
+
+    expect(created.status).toBe(409);
+    await expect(created.json()).resolves.toMatchObject({ error: { code: 'product_not_available' } });
+    expect(await countClaims()).toBe(0);
   });
 
   it('requires authentication to create or list claims', async () => {

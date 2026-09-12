@@ -23,6 +23,17 @@ describe('PaymentClaimPage', () => {
     expect(screen.getByRole('button', { name: '提交付款申请' })).toBeInTheDocument();
   });
 
+  it('omits coming-soon products and falls back to a claimable product', () => {
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=anbu']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    expect(screen.getByLabelText('产品')).toHaveValue('bundle');
+    expect(screen.queryByRole('option', { name: /暗部课程/ })).not.toBeInTheDocument();
+  });
+
   it('submits the selected product and screenshot, then shows the pending order number', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -57,6 +68,4 @@ describe('PaymentClaimPage', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders', expect.anything());
   });
 });
-
-
 

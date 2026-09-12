@@ -23,6 +23,8 @@ export const SCREENSHOT_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp'
 };
 
+const CLAIMABLE_PRODUCT_STATUSES = new Set(['active', 'presale']);
+
 export interface CreatePaymentClaimInput {
   productId: string;
   paidAt: string;
@@ -45,7 +47,6 @@ export interface PaymentClaimPayload {
   actualAmountYuan: number | null;
   paidAt: number;
   contactText: string;
-  screenshotKey: string;
   status: PaymentClaimRow['status'];
   rejectionReason: string | null;
   reviewedBy: string | null;
@@ -99,7 +100,36 @@ export function toPaymentClaimPayload(row: PaymentClaimRow): PaymentClaimPayload
     actualAmountYuan: row.actual_amount_yuan,
     paidAt: row.paid_at,
     contactText: row.contact_text,
-    screenshotKey: row.screenshot_key,
+    status: row.status,
+    rejectionReason: row.rejection_reason,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+interface PaymentClaimAudit {
+  orderNo: string;
+  productId: string;
+  listAmountYuan: number;
+  actualAmountYuan: number | null;
+  paidAt: number;
+  status: PaymentClaimRow['status'];
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+function toPaymentClaimAudit(row: PaymentClaimRow): PaymentClaimAudit {
+  return {
+    orderNo: row.order_no,
+    productId: row.product_id,
+    listAmountYuan: row.list_amount_yuan,
+    actualAmountYuan: row.actual_amount_yuan,
+    paidAt: row.paid_at,
     status: row.status,
     rejectionReason: row.rejection_reason,
     reviewedBy: row.reviewed_by,
@@ -145,6 +175,10 @@ export async function createPaymentClaim(
     throw new ApiError('product_not_found', 'Product not found', 404);
   }
 
+  if (!CLAIMABLE_PRODUCT_STATUSES.has(product.status)) {
+    throw new ApiError('product_not_available', 'This product is not available for claims yet', 409);
+  }
+
   const paidAt = Date.parse(input.paidAt);
   if (!Number.isFinite(paidAt)) {
     throw new ApiError('invalid_paid_at', 'Paid time must be a valid date', 400);
@@ -164,8 +198,9 @@ export async function createPaymentClaim(
     throw new ApiError('unsupported_media_type', 'Screenshot must be PNG, JPEG, or WebP', 400);
   }
   const screenshotKey = `payment-claims/${userId}/${orderNo}.${extension}`;
-  await env.SCREENSHOTS.put(screenshotKey, input.screenshot);
-
+  await env.SCREENSHOTS.put(screenshotKey, input.screenshot, {
+    httpMetadata: { contentType: input.screenshot.type }
+  });
   const now = Date.now();
   return insertPaymentClaim(env.DB, {
     id: crypto.randomUUID(),
@@ -187,6 +222,26 @@ export async function listMyPaymentClaims(env: Env, userId: string): Promise<Pay
 
 export async function listPaymentClaims(env: Env): Promise<PaymentClaimRow[]> {
   return listAllPaymentClaims(env.DB);
+}
+
+export async function getPaymentClaimScreenshot(
+  env: Env,
+  orderNo: string
+): Promise<{ contentType: string; body: ReadableStream }> {
+  const claim = await findPaymentClaimByOrderNo(env.DB, orderNo);
+  if (!claim) {
+    throw new ApiError('order_not_found', 'Payment claim not found', 404);
+  }
+
+  const object = await env.SCREENSHOTS.get(claim.screenshot_key);
+  if (!object) {
+    throw new ApiError('screenshot_not_found', 'Screenshot not found', 404);
+  }
+
+  return {
+    contentType: object.httpMetadata?.contentType ?? 'application/octet-stream',
+    body: object.body
+  };
 }
 
 async function entitledProductIds(db: D1Database, productId: string): Promise<string[]> {
@@ -225,8 +280,8 @@ async function approvePaymentClaim(
     action: 'order.approved',
     entityType: 'payment_claim',
     entityId: claim.order_no,
-    before: claim,
-    after: updated
+    before: toPaymentClaimAudit(claim),
+    after: toPaymentClaimAudit(updated)
   });
 
   return updated;
@@ -253,8 +308,8 @@ async function rejectPaymentClaim(
     action: 'order.rejected',
     entityType: 'payment_claim',
     entityId: claim.order_no,
-    before: claim,
-    after: updated
+    before: toPaymentClaimAudit(claim),
+    after: toPaymentClaimAudit(updated)
   });
 
   return updated;
@@ -296,5 +351,4 @@ export async function reviewPaymentClaim(
 
   return rejectPaymentClaim(env, reviewerUserId, claim, rejectionReason);
 }
-
 
