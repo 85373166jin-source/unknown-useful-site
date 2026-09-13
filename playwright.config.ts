@@ -1,11 +1,21 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'playwright/test';
 
 const root = process.cwd();
 const apiDir = path.join(root, 'apps', 'api');
 const webDir = path.join(root, 'apps', 'web');
-const wranglerBin = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
-const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+const wranglerCandidates = [
+  path.join(apiDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js'),
+  path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
+];
+const viteCandidates = [
+  path.join(webDir, 'node_modules', 'vite', 'bin', 'vite.js'),
+  path.join(root, 'node_modules', 'vite', 'bin', 'vite.js')
+];
+const wranglerBin = wranglerCandidates.find((candidate) => fs.existsSync(candidate));
+const viteBin = viteCandidates.find((candidate) => fs.existsSync(candidate));
+if (!wranglerBin || !viteBin) throw new Error('wrangler or vite executable was not found');
 const seedScript = path.join(root, 'tests', 'e2e', 'seed-local.mjs');
 const configHome = path.join(root, 'work', '.config');
 

@@ -8,7 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..', '..');
 const apiDir = path.join(root, 'apps', 'api');
-const wranglerBin = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+const wranglerCandidates = [
+  path.join(apiDir, 'node_modules', 'wrangler', 'bin', 'wrangler.js'),
+  path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js')
+];
+const wranglerBin = wranglerCandidates.find((candidate) => fs.existsSync(candidate));
+if (!wranglerBin) throw new Error('wrangler executable was not found under apps/api or the repository root');
 const workDir = path.join(root, 'work');
 const configHome = path.join(workDir, '.config');
 const seedSqlPath = path.join(workDir, 'e2e-seed.sql');
