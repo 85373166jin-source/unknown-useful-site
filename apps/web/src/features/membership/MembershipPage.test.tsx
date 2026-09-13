@@ -49,10 +49,12 @@ describe('MembershipPage', () => {
     expect(await screen.findByText('当前为普通用户')).toBeInTheDocument();
     expect(screen.getByText('VIP 会员')).toBeInTheDocument();
     expect(screen.getByText('9.9 元 / 30 天')).toBeInTheDocument();
-    expect(screen.getByText('符合范围商品 8 折')).toBeInTheDocument();
+    expect(screen.getByText('全场商品 8 折')).toBeInTheDocument();
+    expect(screen.getByText('VIP 会员身份标识')).toBeInTheDocument();
+    expect(screen.queryByText('购买后由站长审核开通')).not.toBeInTheDocument();
     expect(screen.getByText('SVIP 豪华会员')).toBeInTheDocument();
     expect(screen.getByText('19.9 元 / 30 天')).toBeInTheDocument();
-    expect(screen.getByText('符合范围商品 5 折')).toBeInTheDocument();
+    expect(screen.getByText('全场商品 5 折')).toBeInTheDocument();
     expect(screen.getByText('当前折扣：原价')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '购买 VIP' })).toHaveAttribute(
       'href',

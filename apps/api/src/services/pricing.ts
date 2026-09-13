@@ -6,7 +6,7 @@ import {
   type ProductType
 } from '@site/contracts';
 
-const DISCOUNTABLE_PRODUCT_TYPES = new Set<ProductType>(['course', 'digital']);
+const NON_DISCOUNTABLE_PRODUCT_TYPES = new Set<ProductType>(['membership', 'partner_opening']);
 
 export interface PriceableProduct {
   price_cents: number;
@@ -21,7 +21,7 @@ export function priceForTier(cents: number, productType: ProductType, tier: Memb
   MoneyCentsSchema.parse(cents);
   MembershipTierSchema.parse(tier);
 
-  if (!DISCOUNTABLE_PRODUCT_TYPES.has(productType)) {
+  if (NON_DISCOUNTABLE_PRODUCT_TYPES.has(productType)) {
     return cents;
   }
 

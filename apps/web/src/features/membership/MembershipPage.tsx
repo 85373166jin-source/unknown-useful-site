@@ -59,7 +59,7 @@ export function MembershipPage() {
     <section className="membership-page">
       <header className="membership-page__header">
         <h1>会员中心</h1>
-        <p>开通或续费会员，享受符合范围商品的会员折扣。</p>
+        <p>开通或续费会员，享受全场商品的会员折扣。</p>
       </header>
 
       {error ? (
@@ -86,9 +86,8 @@ export function MembershipPage() {
           <h2>VIP 会员</h2>
           <p className="membership-card__price">9.9 元 / 30 天</p>
           <ul>
-            <li>符合范围商品 8 折</li>
-            <li>会员身份标识</li>
-            <li>购买后由站长审核开通</li>
+            <li>全场商品 8 折</li>
+            <li>VIP 会员身份标识</li>
           </ul>
           {tier === 'normal' ? (
             <Link className="button button--primary" to="/payment-claim?productId=vip_monthly">
@@ -109,9 +108,8 @@ export function MembershipPage() {
           <h2>SVIP 豪华会员</h2>
           <p className="membership-card__price">19.9 元 / 30 天</p>
           <ul>
-            <li>符合范围商品 5 折</li>
+            <li>全场商品 5 折</li>
             <li>SVIP 专属身份标识</li>
-            <li>购买后由站长审核开通</li>
           </ul>
           {tier === 'svip' ? (
             <Link className="button button--primary" to="/payment-claim?productId=svip_monthly">

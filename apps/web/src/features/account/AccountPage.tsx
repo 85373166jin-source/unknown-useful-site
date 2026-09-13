@@ -163,7 +163,7 @@ export function AccountPage() {
           {membershipTier === 'normal' ? (
             <>
               <p className="account-identity-block__detail">尚未开通会员</p>
-              <p className="account-identity-block__advice">开通后可享受符合范围商品折扣</p>
+              <p className="account-identity-block__advice">开通后可享受全场商品折扣</p>
               <Link to="/membership">开通会员</Link>
             </>
           ) : (
