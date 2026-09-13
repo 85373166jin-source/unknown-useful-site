@@ -73,6 +73,9 @@ export function applyMembershipPurchase(
   now: number
 ): MembershipPurchaseResult {
   const effective = effectiveMembership(current, now);
+  if (effective.tier === 'svip' && purchasedTier === 'vip') {
+    throw new Error('SVIP cannot downgrade to VIP');
+  }
   return {
     tier: purchasedTier,
     expiresAt: nextMembershipExpiry(

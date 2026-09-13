@@ -187,6 +187,32 @@ describe('admin reporting and user management API', () => {
     await resetTestDatabase(env.DB);
   });
 
+  it('rejects a permission_role admin account from owner-only routes', async () => {
+    const adminHash = await hashPassword('admin-password-123');
+    const now = Date.now();
+    await env.DB.prepare(
+      `INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at)
+       VALUES ('moderator-1', 'moderator-1', ?, 'admin', 'admin', 'active', ?, ?)`
+    )
+      .bind(adminHash, now, now)
+      .run();
+
+    const login = await app.request(
+      '/api/v1/auth/login',
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ username: 'moderator-1', password: 'admin-password-123' })
+      },
+      env
+    );
+    expect(login.status).toBe(200);
+    const { token } = await login.json<{ token: string }>();
+
+    const response = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(token) }, env);
+    await expectError(response, 403, 'forbidden');
+  });
+
   it('returns confirmed revenue, pending counts, and user metrics on the dashboard', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');

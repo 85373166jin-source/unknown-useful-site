@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../middleware/auth';
-import { bearerAuth, requireAdmin } from '../middleware/auth';
+import { bearerAuth, requireOwner } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
 import {
@@ -346,19 +346,19 @@ async function singleUserPayload(env: AppEnv['Bindings'], user: UserRow): Promis
 
 export const adminRoutes = new Hono<AppEnv>();
 
-adminRoutes.get('/orders', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/orders', bearerAuth, requireOwner, async (c) => {
   const claims = await listPaymentClaims(c.env);
   return c.json({ orders: claims.map(toPaymentClaimPayload) });
 });
 
-adminRoutes.get('/orders/:orderNo/screenshot', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/orders/:orderNo/screenshot', bearerAuth, requireOwner, async (c) => {
   const screenshot = await getPaymentClaimScreenshot(c.env, c.req.param('orderNo'));
   c.header('Content-Type', screenshot.contentType);
   c.header('Cache-Control', 'private, no-store');
   return c.body(screenshot.body);
 });
 
-adminRoutes.patch('/orders/:id/review', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.patch('/orders/:id/review', bearerAuth, requireOwner, async (c) => {
   const parsed = reviewSchema.safeParse(await readJson(c));
   if (!parsed.success) {
     throw new ApiError('invalid_request', 'Request validation failed', 400);
@@ -368,28 +368,28 @@ adminRoutes.patch('/orders/:id/review', bearerAuth, requireAdmin, async (c) => {
   return c.json(toPaymentClaimPayload(claim));
 });
 
-adminRoutes.get('/dashboard', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/dashboard', bearerAuth, requireOwner, async (c) => {
   return c.json(await getDashboard(c.env));
 });
 
-adminRoutes.get('/revenue', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/revenue', bearerAuth, requireOwner, async (c) => {
   const range = c.req.query('range');
   return c.json(await getRevenueReport(c.env, range));
 });
 
-adminRoutes.get('/users', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/users', bearerAuth, requireOwner, async (c) => {
   return c.json({ users: await listAdminUsers(c.env) });
 });
 
-adminRoutes.get('/risk', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/risk', bearerAuth, requireOwner, async (c) => {
   return c.json({ users: await listRiskUsers(c.env) });
 });
 
-adminRoutes.get('/audit', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.get('/audit', bearerAuth, requireOwner, async (c) => {
   return c.json({ audits: await listAuditHistory(c.env) });
 });
 
-adminRoutes.patch('/security', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.patch('/security', bearerAuth, requireOwner, async (c) => {
   const parsed = adminSecuritySchema.safeParse(await readJson(c));
   if (!parsed.success) {
     throw new ApiError('invalid_request', 'Request validation failed', 400);
@@ -480,7 +480,7 @@ adminRoutes.patch('/security', bearerAuth, requireAdmin, async (c) => {
   return c.json({ ok: true, requireLogin: usernameChanged || passwordChanged });
 });
 
-adminRoutes.patch('/users/:id', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.patch('/users/:id', bearerAuth, requireOwner, async (c) => {
   const parsed = userMutationSchema.safeParse(await readJson(c));
   if (!parsed.success) {
     throw new ApiError('invalid_request', 'Request validation failed', 400);
@@ -552,7 +552,7 @@ adminRoutes.patch('/users/:id', bearerAuth, requireAdmin, async (c) => {
   return c.json({ user: await singleUserPayload(c.env, updated) });
 });
 
-adminRoutes.post('/users/:id/reset-password', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.post('/users/:id/reset-password', bearerAuth, requireOwner, async (c) => {
   const parsed = resetPasswordSchema.safeParse(await readJson(c));
   if (!parsed.success) {
     throw new ApiError('invalid_request', 'Request validation failed', 400);
@@ -579,7 +579,7 @@ adminRoutes.post('/users/:id/reset-password', bearerAuth, requireAdmin, async (c
   return c.json({ ok: true });
 });
 
-adminRoutes.delete('/users/:id/contact/:kind', bearerAuth, requireAdmin, async (c) => {
+adminRoutes.delete('/users/:id/contact/:kind', bearerAuth, requireOwner, async (c) => {
   const parsedKind = contactKindSchema.safeParse(c.req.param('kind'));
   if (!parsedKind.success) {
     throw new ApiError('invalid_request', 'Contact kind must be phone or email', 400);
