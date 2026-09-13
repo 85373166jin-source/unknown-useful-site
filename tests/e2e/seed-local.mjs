@@ -72,16 +72,26 @@ function buildSeedSql(superHash, anbuHash, adminHash) {
   const now = Date.now();
   const lines = [];
 
-  const insertProduct = (id, title, priceYuan, status, categoryId, sortOrder, description) => {
+  const insertProduct = (
+    id,
+    title,
+    priceYuan,
+    status,
+    categoryId,
+    sortOrder,
+    description,
+    priceCents = priceYuan * 100,
+    productType = 'course'
+  ) => {
     lines.push(
-      `INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, description, created_at, updated_at) VALUES (${sqlQuote(id)}, ${sqlQuote(title)}, ${priceYuan}, ${sqlQuote(status)}, ${sqlQuote(categoryId)}, ${sortOrder}, ${sqlQuote(description)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, price_yuan = excluded.price_yuan, status = excluded.status, category_id = excluded.category_id, sort_order = excluded.sort_order, description = excluded.description, updated_at = excluded.updated_at;`
+      `INSERT INTO products (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at) VALUES (${sqlQuote(id)}, ${sqlQuote(title)}, ${priceYuan}, ${priceCents}, ${sqlQuote(productType)}, ${sqlQuote(status)}, ${sqlQuote(categoryId)}, ${sortOrder}, ${sqlQuote(description)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, price_yuan = excluded.price_yuan, price_cents = excluded.price_cents, product_type = excluded.product_type, status = excluded.status, category_id = excluded.category_id, sort_order = excluded.sort_order, description = excluded.description, updated_at = excluded.updated_at;`
     );
   };
-
   insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '9 个视频、在线播放、下载、进度同步');
   insertProduct('bundle', '火影合集', 49, 'presale', 'courses', 2, '超影课程权益加暗部课程权益');
   insertProduct('anbu', '暗部课程', 29, 'coming_soon', 'courses', 3, '素材到位后配置视频与课程密码');
-
+  insertProduct('vip_monthly', 'VIP 会员', 10, 'active', 'memberships', 4, 'VIP 会员 30 天', 990, 'membership');
+  insertProduct('svip_monthly', 'SVIP 豪华会员', 20, 'active', 'memberships', 5, 'SVIP 豪华会员 30 天', 1990, 'membership');
   lines.push(
     `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('super', '超影课程', 'active', ${sqlQuote(superHash)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, course_password_hash = excluded.course_password_hash, updated_at = excluded.updated_at;`
   );
@@ -103,7 +113,7 @@ function buildSeedSql(superHash, anbuHash, adminHash) {
   }
 
   lines.push(
-    `INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('admin', 'admin', ${sqlQuote(adminHash)}, 'admin', 'active', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET username = excluded.username, password_hash = excluded.password_hash, role = excluded.role, status = excluded.status, updated_at = excluded.updated_at;`
+    `INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at) VALUES ('admin', 'admin', ${sqlQuote(adminHash)}, 'admin', 'owner', 'active', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET username = excluded.username, password_hash = excluded.password_hash, role = excluded.role, permission_role = excluded.permission_role, status = excluded.status, updated_at = excluded.updated_at;`
   );
 
   return lines.join('\n');

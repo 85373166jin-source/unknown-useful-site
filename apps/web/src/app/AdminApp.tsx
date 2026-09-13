@@ -2,27 +2,35 @@ import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-rou
 import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
 import { AdminDashboard } from '../features/admin/AdminDashboard';
+import { AdminMemberships } from '../features/admin/AdminMemberships';
 import { AdminOrders } from '../features/admin/AdminOrders';
 import { AdminRevenue } from '../features/admin/AdminRevenue';
 import { AdminSettings } from '../features/admin/AdminSettings';
 import { AdminUsers } from '../features/admin/AdminUsers';
 
-const ADMIN_NAV_ITEMS = [
+interface AdminNavItem {
+  to: string;
+  label: string;
+  ownerOnly?: boolean;
+}
+
+const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { to: '/dashboard', label: '仪表盘' },
   { to: '/orders', label: '订单审核' },
   { to: '/users', label: '用户管理' },
+  { to: '/memberships', label: '会员管理', ownerOnly: true },
   { to: '/revenue', label: '收入统计' },
   { to: '/audit', label: '审计记录' },
   { to: '/settings', label: '安全设置' }
 ];
 
-function AdminLayout() {
+function AdminLayout({ isOwner }: { isOwner: boolean }) {
   return (
     <div className="admin-app">
       <aside className="admin-sidebar">
         <div className="admin-sidebar__brand">站长后台</div>
         <nav className="admin-sidebar__nav" aria-label="管理导航">
-          {ADMIN_NAV_ITEMS.map((item) => (
+          {ADMIN_NAV_ITEMS.filter((item) => !item.ownerOnly || isOwner).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -77,14 +85,20 @@ export function AdminApp() {
     return <AdminForbidden />;
   }
 
+  const isOwner = user?.permissionRole === 'owner';
+
   return (
     <Routes>
       <Route path="/login" element={<AdminLoginNotice />} />
-      <Route element={<AdminLayout />}>
+      <Route element={<AdminLayout isOwner={isOwner} />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<AdminDashboard />} />
         <Route path="/orders" element={<AdminOrders />} />
         <Route path="/users" element={<AdminUsers />} />
+        <Route
+          path="/memberships"
+          element={isOwner ? <AdminMemberships /> : <Navigate to="/dashboard" replace />}
+        />
         <Route path="/revenue" element={<AdminRevenue />} />
         <Route path="/audit" element={<AdminAudit />} />
         <Route path="/settings" element={<AdminSettings />} />

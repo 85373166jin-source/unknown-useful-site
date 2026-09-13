@@ -2,6 +2,8 @@ import { expect, test } from 'playwright/test';
 import {
   ADMIN_PASSWORD,
   ADMIN_USERNAME,
+  API_URL,
+  ONE_PIXEL_PNG,
   createPaymentClaim,
   loginUser,
   registerUser,
@@ -42,4 +44,31 @@ test('normal users see no admin navigation', async ({ page, request }) => {
   await page.goto('/admin/');
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
   await expect(page.locator('.admin-sidebar__nav')).toHaveCount(0);
+});
+
+test('an approved VIP claim applies the discounted course price', async ({ page, request }) => {
+  const { token } = await registerUser(request, uniqueUsername('e2e-membership'));
+  const claim = await createPaymentClaim(request, token, {
+    productId: 'vip_monthly',
+    contactText: `e2e-membership-${Date.now()}@example.com`
+  });
+
+  const admin = await loginUser(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const review = await request.patch(`${API_URL}/api/v1/admin/orders/${claim.orderNo}/review`, {
+    headers: { Authorization: `Bearer ${admin.token}` },
+    data: { decision: 'approve', actualAmountCents: 990 }
+  });
+  expect(review.status()).toBe(200);
+
+  await setSession(page, token);
+  await page.goto('/#/payment-claim?productId=super');
+  await page.locator('#payment-contact').fill(`e2e-course-${Date.now()}@example.com`);
+  await page.locator('#payment-screenshot').setInputFiles({
+    name: 'payment.png',
+    mimeType: 'image/png',
+    buffer: ONE_PIXEL_PNG
+  });
+  await page.getByRole('button', { name: '提交付款申请' }).click();
+
+  await expect(page.locator('.payment-claim-form__payable')).toHaveText('当前应付：23.20 元');
 });
