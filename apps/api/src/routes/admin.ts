@@ -34,6 +34,7 @@ const reviewSchema = z
   .object({
     decision: z.enum(['approve', 'reject', 'correct']),
     actualAmountYuan: z.number().int().min(0).optional(),
+    actualAmountCents: z.number().int().nonnegative().optional(),
     paidAt: z.string().min(1).optional(),
     note: z.string().max(1000).optional(),
     rejectionReason: z.string().min(1).optional()
@@ -50,6 +51,7 @@ const reviewSchema = z
     if (
       value.decision === 'correct' &&
       value.actualAmountYuan === undefined &&
+      value.actualAmountCents === undefined &&
       value.paidAt === undefined &&
       value.note === undefined
     ) {

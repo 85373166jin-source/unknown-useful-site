@@ -8,16 +8,16 @@ describe('server pricing', () => {
     expect(priceForTier(2900, 'course', 'svip')).toBe(1450);
   });
 
-  it('does not discount membership, opening, service, or tip products', () => {
+  it('does not discount membership, opening, service, tip, or other products', () => {
     expect(priceForTier(990, 'membership', 'svip')).toBe(990);
     expect(priceForTier(1, 'partner_opening', 'svip')).toBe(1);
     expect(priceForTier(10000, 'service', 'svip')).toBe(10000);
+    expect(priceForTier(2000, 'other', 'svip')).toBe(2000);
   });
 
-  it('discounts digital and other virtual products', () => {
+  it('discounts digital products', () => {
     expect(priceForTier(1000, 'digital', 'vip')).toBe(800);
     expect(priceForTier(1000, 'digital', 'svip')).toBe(500);
-    expect(priceForTier(2000, 'other', 'svip')).toBe(1000);
   });
 
   it('prices a product for an effective membership', () => {

@@ -15,6 +15,8 @@ type Claim = {
   productId: string;
   listAmountYuan: number;
   actualAmountYuan: number | null;
+  listAmountCents: number;
+  actualAmountCents: number | null;
   paidAt: number;
   contactText: string;
   screenshotKey: string;
@@ -158,6 +160,14 @@ async function countClaims(): Promise<number> {
   return row?.count ?? 0;
 }
 
+async function setMembership(userId: string, tier: 'vip' | 'svip', expiresAt: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users SET membership_tier = ?, membership_expires_at = ? WHERE id = ?`
+  )
+    .bind(tier, expiresAt, userId)
+    .run();
+}
+
 async function activeProductsFor(userId: string): Promise<string[]> {
   const rows = await env.DB.prepare(
     `SELECT product_id FROM entitlements WHERE user_id = ? AND status = 'active' ORDER BY product_id`
@@ -230,6 +240,59 @@ describe('payment claims API', () => {
     expect(reviewed.status).toBe(200);
     const reviewedClaim = await reviewed.json<Claim>();
     expect(reviewedClaim.actualAmountYuan).toBe(49);
+  });
+
+  it('preserves exact discounted cents when approving a VIP order without an amount', async () => {
+    const token = await registerUser('alice');
+    const userId = await getUserId(token);
+    const adminToken = await seedAdmin();
+    await setMembership(userId, 'vip', Date.now() + 24 * 60 * 60 * 1000);
+
+    const created = await createClaim(token, claimForm({ productId: 'super' }));
+    expect(created.status).toBe(201);
+    const claim = await created.json<Claim>();
+    expect(claim.listAmountCents).toBe(2900);
+    expect(claim.actualAmountCents).toBe(2320);
+    expect(claim.actualAmountYuan).toBe(23);
+
+    const reviewed = await reviewClaim(adminToken, claim.orderNo, { decision: 'approve' });
+    expect(reviewed.status).toBe(200);
+    const reviewedClaim = await reviewed.json<Claim>();
+    expect(reviewedClaim.actualAmountCents).toBe(2320);
+    expect(reviewedClaim.actualAmountYuan).toBe(23);
+
+    const row = await env.DB.prepare(
+      `SELECT list_amount_cents, actual_amount_cents, actual_amount_yuan FROM payment_claims WHERE order_no = ?`
+    )
+      .bind(claim.orderNo)
+      .first<{ list_amount_cents: number; actual_amount_cents: number | null; actual_amount_yuan: number | null }>();
+    expect(row).toEqual({ list_amount_cents: 2900, actual_amount_cents: 2320, actual_amount_yuan: 23 });
+  });
+
+  it('corrects an approved amount with exact cents', async () => {
+    const token = await registerUser('alice');
+    const userId = await getUserId(token);
+    const adminToken = await seedAdmin();
+    await setMembership(userId, 'svip', Date.now() + 24 * 60 * 60 * 1000);
+
+    const claim = await (await createClaim(token, claimForm({ productId: 'super' }))).json<Claim>();
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve' });
+
+    const corrected = await reviewClaim(adminToken, claim.orderNo, {
+      decision: 'correct',
+      actualAmountCents: 1500
+    });
+    expect(corrected.status).toBe(200);
+    const correctedClaim = await corrected.json<Claim>();
+    expect(correctedClaim.actualAmountCents).toBe(1500);
+    expect(correctedClaim.actualAmountYuan).toBe(15);
+
+    const row = await env.DB.prepare(
+      `SELECT actual_amount_cents, actual_amount_yuan FROM payment_claims WHERE order_no = ?`
+    )
+      .bind(claim.orderNo)
+      .first<{ actual_amount_cents: number | null; actual_amount_yuan: number | null }>();
+    expect(row).toEqual({ actual_amount_cents: 1500, actual_amount_yuan: 15 });
   });
 
   it('keeps approval idempotent', async () => {

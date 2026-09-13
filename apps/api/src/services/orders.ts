@@ -39,6 +39,7 @@ export interface CreatePaymentClaimInput {
 export interface ReviewPaymentClaimInput {
   decision: 'approve' | 'reject' | 'correct';
   actualAmountYuan?: number | undefined;
+  actualAmountCents?: number | undefined;
   paidAt?: string | undefined;
   note?: string | undefined;
   rejectionReason?: string | undefined;
@@ -51,6 +52,8 @@ export interface PaymentClaimPayload {
   productId: string;
   listAmountYuan: number;
   actualAmountYuan: number | null;
+  listAmountCents: number;
+  actualAmountCents: number | null;
   paidAt: number;
   contactText: string;
   status: PaymentClaimRow['status'];
@@ -105,6 +108,8 @@ export function toPaymentClaimPayload(row: PaymentClaimRow): PaymentClaimPayload
     productId: row.product_id,
     listAmountYuan: row.list_amount_yuan,
     actualAmountYuan: row.actual_amount_yuan,
+    listAmountCents: row.list_amount_cents,
+    actualAmountCents: row.actual_amount_cents,
     paidAt: row.paid_at,
     contactText: row.contact_text,
     status: row.status,
@@ -122,6 +127,8 @@ interface PaymentClaimAudit {
   productId: string;
   listAmountYuan: number;
   actualAmountYuan: number | null;
+  listAmountCents: number;
+  actualAmountCents: number | null;
   paidAt: number;
   status: PaymentClaimRow['status'];
   rejectionReason: string | null;
@@ -138,6 +145,8 @@ function toPaymentClaimAudit(row: PaymentClaimRow): PaymentClaimAudit {
     productId: row.product_id,
     listAmountYuan: row.list_amount_yuan,
     actualAmountYuan: row.actual_amount_yuan,
+    listAmountCents: row.list_amount_cents,
+    actualAmountCents: row.actual_amount_cents,
     paidAt: row.paid_at,
     status: row.status,
     rejectionReason: row.rejection_reason,
@@ -278,17 +287,45 @@ async function entitledProductIds(db: D1Database, productId: string): Promise<st
   return components.length > 0 ? components : [productId];
 }
 
+function resolvedActualAmount(
+  claim: PaymentClaimRow,
+  input: ReviewPaymentClaimInput
+): { actualAmountYuan: number; actualAmountCents: number } {
+  const storedCents = claim.actual_amount_cents ?? claim.list_amount_cents;
+
+  if (input.actualAmountCents !== undefined) {
+    return {
+      actualAmountCents: input.actualAmountCents,
+      actualAmountYuan: Math.round(input.actualAmountCents / 100)
+    };
+  }
+
+  if (input.actualAmountYuan !== undefined) {
+    return {
+      actualAmountCents: input.actualAmountYuan * 100,
+      actualAmountYuan: input.actualAmountYuan
+    };
+  }
+
+  return {
+    actualAmountCents: storedCents,
+    actualAmountYuan: Math.round(storedCents / 100)
+  };
+}
+
 async function approvePaymentClaim(
   env: Env,
   reviewerUserId: string,
   claim: PaymentClaimRow,
   actualAmountYuan: number,
+  actualAmountCents: number,
   note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
   const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
     status: 'approved',
     actualAmountYuan,
+    actualAmountCents,
     rejectionReason: null,
     note,
     reviewedBy: reviewerUserId,
@@ -329,6 +366,7 @@ async function rejectPaymentClaim(
   const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
     status: 'rejected',
     actualAmountYuan: null,
+    actualAmountCents: null,
     rejectionReason,
     note,
     reviewedBy: reviewerUserId,
@@ -363,11 +401,12 @@ async function correctPaymentClaim(
     paidAt = parsedPaidAt;
   }
 
-  const actualAmountYuan = input.actualAmountYuan ?? claim.actual_amount_yuan ?? claim.list_amount_yuan;
+  const amount = resolvedActualAmount(claim, input);
   const note = input.note === undefined ? claim.admin_note : input.note.trim() || null;
   const now = Date.now();
   const updated = await updatePaymentClaimCorrection(env.DB, claim.order_no, {
-    actualAmountYuan,
+    actualAmountYuan: amount.actualAmountYuan,
+    actualAmountCents: amount.actualAmountCents,
     paidAt,
     note,
     updatedAt: now
@@ -410,9 +449,16 @@ export async function reviewPaymentClaim(
     if (claim.status === 'rejected') {
       throw new ApiError('invalid_state', 'A rejected payment claim cannot be approved', 409);
     }
-    const amount = input.actualAmountYuan ?? claim.actual_amount_yuan ?? claim.list_amount_yuan;
+    const amount = resolvedActualAmount(claim, input);
     const note = input.note?.trim() || null;
-    return approvePaymentClaim(env, reviewerUserId, claim, amount, note);
+    return approvePaymentClaim(
+      env,
+      reviewerUserId,
+      claim,
+      amount.actualAmountYuan,
+      amount.actualAmountCents,
+      note
+    );
   }
 
   if (claim.status === 'rejected') {

@@ -53,6 +53,7 @@ export interface InsertPaymentClaimInput {
 export interface UpdatePaymentClaimReviewInput {
   status: 'approved' | 'rejected';
   actualAmountYuan: number | null;
+  actualAmountCents: number | null;
   rejectionReason: string | null;
   note: string | null;
   reviewedBy: string;
@@ -62,6 +63,7 @@ export interface UpdatePaymentClaimReviewInput {
 
 export interface UpdatePaymentClaimCorrectionInput {
   actualAmountYuan: number;
+  actualAmountCents: number;
   paidAt: number;
   note: string | null;
   updatedAt: number;
@@ -198,7 +200,7 @@ export async function updatePaymentClaimReview(
     )
     .bind(
       input.actualAmountYuan,
-      input.actualAmountYuan === null ? null : input.actualAmountYuan * 100,
+      input.actualAmountCents,
       input.status,
       input.rejectionReason,
       input.note,
@@ -231,7 +233,7 @@ export async function updatePaymentClaimCorrection(
            updated_at = ?
        WHERE order_no = ?`
     )
-    .bind(input.actualAmountYuan, input.actualAmountYuan * 100, input.paidAt, input.note, input.updatedAt, orderNo)
+    .bind(input.actualAmountYuan, input.actualAmountCents, input.paidAt, input.note, input.updatedAt, orderNo)
     .run();
 
   const updated = await findPaymentClaimByOrderNo(db, orderNo);

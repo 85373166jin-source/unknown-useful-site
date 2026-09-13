@@ -6,7 +6,7 @@ import {
   type ProductType
 } from '@site/contracts';
 
-const DISCOUNTABLE_PRODUCT_TYPES = new Set<ProductType>(['course', 'digital', 'other']);
+const DISCOUNTABLE_PRODUCT_TYPES = new Set<ProductType>(['course', 'digital']);
 
 export interface PriceableProduct {
   price_cents: number;
