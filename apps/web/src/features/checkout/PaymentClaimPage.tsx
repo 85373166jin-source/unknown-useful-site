@@ -21,6 +21,11 @@ function toLocalDateTimeInputValue(date: Date): string {
   )}:${pad(date.getMinutes())}`;
 }
 
+export function paymentQrFallback(baseUrl = import.meta.env.BASE_URL): string {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return `${normalizedBase}payment-qr.svg`;
+}
+
 function validInitialProductId(value: string | null): ProductId {
   if (value && CLAIMABLE_PRODUCT_IDS.has(value as ProductId)) {
     return value as ProductId;
@@ -39,7 +44,7 @@ export function PaymentClaimPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClaimPayload | null>(null);
 
-  const qrUrl = import.meta.env.VITE_PAYMENT_QR_URL || '/payment-qr.svg';
+  const qrUrl = import.meta.env.VITE_PAYMENT_QR_URL || paymentQrFallback();
   const selectedProduct = CATALOG.products[productId];
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {

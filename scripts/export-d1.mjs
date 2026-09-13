@@ -25,18 +25,25 @@ const output = resolve(
 
 mkdirSync(dirname(output), { recursive: true });
 
-const result = spawnSync(
-  process.execPath,
-  [
-    wranglerBin,
-    'd1',
-    'export',
-    'DB',
-    '--remote',
-    '--output',
-    output,
-    '--skip-confirmation'
-  ],
+const wranglerArgs = [
+  wranglerBin,
+  'd1',
+  'export',
+  'DB',
+  '--remote',
+  '--output',
+  output,
+  '--skip-confirmation'
+];
+
+if (process.argv.includes('--no-schema')) {
+  wranglerArgs.push('--no-schema');
+}
+if (process.argv.includes('--no-data')) {
+  wranglerArgs.push('--no-data');
+}
+
+const result = spawnSync(process.execPath, wranglerArgs,
   {
     cwd: join(repoRoot, 'apps', 'api'),
     stdio: 'inherit'

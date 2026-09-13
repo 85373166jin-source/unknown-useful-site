@@ -103,12 +103,48 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
     .run();
 }
 
+function readSeedToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  if (authorization) {
+    const match = /^Bearer\s+(.+)$/i.exec(authorization);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return request.headers.get("x-seed-token");
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  if (leftBytes.length !== rightBytes.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index]! ^ rightBytes[index]!;
+  }
+  return difference === 0;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname !== '/seed') {
-      return new Response('Not found', { status: 404 });
+    if (url.pathname !== "/seed") {
+      return new Response("Not found", { status: 404 });
     }
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { Allow: "POST" }
+      });
+    }
+
+    const token = readSeedToken(request);
+    if (!env.SEED_TOKEN || !token || !safeEqual(token, env.SEED_TOKEN)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     await seedCatalogAndAdmin(env);
     return Response.json({ ok: true });
   }

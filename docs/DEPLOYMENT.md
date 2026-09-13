@@ -21,6 +21,7 @@ The `.github/workflows/deploy-pages.yml` workflow:
 
 - runs on pushes to `main` (and manually via `workflow_dispatch`);
 - checks out the repository, installs Node 22, and runs `npm ci`;
+- fails fast when the required `VITE_API_BASE_URL` repository variable is missing;
 - sets `VITE_BASE_PATH` to the repository subpath
   (`/<repository-name>/`, for example `/unknown-useful-site/`);
 - runs the workspace tests and production build;
@@ -31,29 +32,33 @@ The repository must grant the `pages: write` and `id-token: write` permissions a
 enable GitHub Actions from the repository settings. The workflow requests those
 permissions itself at the top of the file.
 
-### VITE_API_BASE_URL
+### Repository variables
 
-The public frontend reads `VITE_API_BASE_URL` in `apps/web/src/lib/api.ts`. It
-defaults to `/api/v1` for the local Vite dev proxy.
+The deploy workflow reads two GitHub Actions repository variables from the
+`Variables` tab of the Actions settings. Set them before the first Pages deploy:
 
-For the GitHub Pages deployment, set the absolute Worker URL when building:
+1. Open the repository on GitHub and go to **Settings > Secrets and variables >
+   Actions**.
+2. Open the **Variables** tab and choose **New repository variable**.
+3. Add `VITE_API_BASE_URL` (required). The workflow fails fast if it is empty or
+   not an absolute URL:
 
-```powershell
-$env:VITE_API_BASE_URL = "https://unknown-useful-site-api.<your-subdomain>.workers.dev/api/v1"
-```
+   - Name: `VITE_API_BASE_URL`
+   - Value: `https://unknown-useful-site-api.<your-subdomain>.workers.dev/api/v1`
 
-The value must point at the deployed Worker and must not contain a trailing slash.
+4. Add `VITE_PAYMENT_QR_URL` (optional):
 
-### VITE_PAYMENT_QR_URL
+   - Name: `VITE_PAYMENT_QR_URL`
+   - Value: `https://your-cdn.example.com/payment-qr.png`
 
-`PaymentClaimPage` reads `VITE_PAYMENT_QR_URL` and falls back to the replace-me
-asset `/payment-qr.svg`. Set it at build time to the real payment QR image URL:
+The workflow reads these values with `vars.VITE_API_BASE_URL` and
+`vars.VITE_PAYMENT_QR_URL`. `VITE_API_BASE_URL` must point at the deployed Worker
+and must not contain a trailing slash.
 
-```powershell
-$env:VITE_PAYMENT_QR_URL = "https://your-cdn.example.com/payment-qr.png"
-```
-
-The asset is expected to be publicly reachable; do not put a private R2 key here.
+`VITE_PAYMENT_QR_URL` may stay empty. When it is empty, `PaymentClaimPage` falls
+back to a base-path-aware `payment-qr.svg` URL resolved from
+`import.meta.env.BASE_URL`, so the fallback still works when the site is published
+under a repository subpath.
 
 ### Custom domain migration
 
@@ -66,32 +71,6 @@ The asset is expected to be publicly reachable; do not put a private R2 key here
    after the domain has been verified.
 4. For the Worker, add a Workers custom domain or route for the API, and update
    `VITE_API_BASE_URL` to use that origin.
-
-## Cloudflare Worker
-
-1. Log in to Cloudflare from the repository machine:
-
-   ```powershell
-   npx wrangler login
-   ```
-
-2. Deploy the API:
-
-   ```powershell
-   npm run deploy:api
-   ```
-
-   The root script runs `wrangler deploy` in `apps/api`. The Worker entry point is
-   `apps/api/src/index.ts` and the deployed name is `unknown-useful-site-api`
-   (`apps/api/wrangler.toml`).
-
-3. After deploying, verify the health endpoint:
-
-   ```powershell
-   Invoke-RestMethod https://unknown-useful-site-api.<your-subdomain>.workers.dev/api/v1/health
-   ```
-
-   The response must be `{ "ok": true }`.
 
 ## D1
 
@@ -118,25 +97,42 @@ for production.
 
 ### Migrations
 
-Apply migrations to the remote database:
+Run the migrations before the first Worker deployment so the schema exists when
+the Worker starts. Back up the remote database before changing schema:
 
 ```powershell
+npm run export:data
 npm run db:migrate:remote
 ```
 
-This runs `wrangler d1 migrations apply DB --remote` from `apps/api`.
+`npm run db:migrate:remote` runs `wrangler d1 migrations apply DB --remote` from
+`apps/api`.
 
 ### Seeding
 
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
-which starts the seed Worker locally and posts to `/seed`.
+which starts the seed Worker locally and posts to `/seed` with a one-time
+`SEED_TOKEN`.
 
-Remote seeding is intentionally gated and disabled. The seed Worker
-(`apps/api/src/db/seed.ts`) exposes `/seed` without authentication and is **not**
-deployed as the production Worker entry point, so there is no publicly callable
-seed route. Do not deploy `src/db/seed.ts` to production until it is protected by
-a secret or an admin guard. The `db:seed:remote` command is a no-op that prints
-this gating message instead of exposing the route.
+Production seeding is guarded and never runs through the public Worker. Run it
+with:
+
+```powershell
+npm run db:seed:remote
+```
+
+Run this after the Worker has been deployed at least once (see **Cloudflare Worker**) so Wrangler can bind the remote secrets. The command starts a temporary `wrangler dev --remote` session for
+`apps/api/src/db/seed.ts`, authenticates with a one-time `SEED_TOKEN`, and posts
+to `/seed` on `127.0.0.1` only. The seed Worker rejects requests without the
+token and is never mounted by `apps/api/src/index.ts`, so the public main entry
+has no `/seed` route. The temporary remote dev session uses the Worker's remote
+D1, R2, and secret bindings, so `ADMIN_PASSWORD_HASH`,
+`SUPER_COURSE_PASSWORD_HASH`, and `ANBU_COURSE_PASSWORD_HASH` are read from the
+Cloudflare secrets rather than from files.
+
+Set `$env:SEED_TOKEN` to a fixed value if the run must use a known token;
+otherwise the script generates one for the session. Do not deploy
+`apps/api/src/db/seed.ts` to production.
 
 ## R2
 
@@ -208,6 +204,35 @@ is not part of the origin. Include each custom domain as a separate entry:
 ```text
 https://www.example.com,https://example.com
 ```
+
+## Cloudflare Worker
+
+Deploy the Worker only after the D1 database, migrations, R2 bucket, and secrets
+above are in place.
+
+1. Log in to Cloudflare from the repository machine:
+
+   ```powershell
+   npx wrangler login
+   ```
+
+2. Deploy the API:
+
+   ```powershell
+   npm run deploy:api
+   ```
+
+   The root script runs `wrangler deploy` in `apps/api`. The Worker entry point is
+   `apps/api/src/index.ts` and the deployed name is `unknown-useful-site-api`
+   (`apps/api/wrangler.toml`).
+
+3. After deploying, verify the health endpoint:
+
+   ```powershell
+   Invoke-RestMethod https://unknown-useful-site-api.<your-subdomain>.workers.dev/api/v1/health
+   ```
+
+   The response must be `{ "ok": true }`.
 
 ## Rollback
 

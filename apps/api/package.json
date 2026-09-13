@@ -11,7 +11,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:seed:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/seed-local.ps1",
-    "db:seed:remote": "node -e \"console.warn('Remote seed is intentionally gated; see docs/DEPLOYMENT.md and docs/OPERATIONS.md. Do not deploy src/db/seed.ts without an admin/secret guard.')\""
+    "db:seed:remote": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/seed-remote.ps1"
   },
   "dependencies": {
     "@site/contracts": "*",

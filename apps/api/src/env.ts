@@ -8,4 +8,5 @@ export interface Env {
   SUPER_COURSE_PASSWORD_HASH: string;
   ANBU_COURSE_PASSWORD_HASH: string;
   ALLOWED_ORIGINS: string;
+  SEED_TOKEN?: string;
 }

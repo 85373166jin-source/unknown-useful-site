@@ -30,6 +30,20 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Validate required repository variables
+        shell: bash
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "::error::VITE_API_BASE_URL repository variable is required. Set it under Settings > Secrets and variables > Actions > Variables." >&2
+            exit 1
+          fi
+          case "$VITE_API_BASE_URL" in
+            https://*|http://*) ;;
+            *) echo "::error::VITE_API_BASE_URL must be an absolute URL." >&2; exit 1 ;;
+          esac
+
       - name: Install dependencies
         run: npm ci
 

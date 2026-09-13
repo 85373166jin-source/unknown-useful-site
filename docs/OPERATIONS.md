@@ -104,9 +104,17 @@ backups as private files because they contain payment information.
 3. Verify the export contains the expected tables (`users`, `payment_claims`,
    `entitlements`, and the other D1 tables) before relying on it.
 
-A D1 restore can be done by applying the schema migrations to a fresh database
-and then executing the exported SQL with `wrangler d1 execute DB --remote
---file=<backup>.sql` after careful review.
+The default export contains both schema and data, so restore it by executing the
+file directly into an empty database:
+
+```powershell
+npx wrangler d1 execute DB --remote --file=<backup>.sql
+```
+
+Do not apply migrations first for a full export; the export already creates the
+tables. To build the schema from migrations instead, export data only first with
+`npm run export:data -- --no-schema`, then apply `apps/api/migrations/0001_init.sql`
+and execute the data-only SQL.
 
 ## Migration to a domestic server
 
@@ -115,9 +123,12 @@ APIs, so migration is a re-deployment rather than a live move.
 
 1. Export the database with `npm run export:data` and download all R2 screenshots.
 2. Copy the public media directory and the built frontend to the new static host.
-3. Deploy the Hono API to the new server with a D1-compatible SQLite database;
-   apply `apps/api/migrations/0001_init.sql` first and then import the exported
-   SQL.
+3. Deploy the Hono API to the new server with a D1-compatible SQLite database.
+   Create the schema by applying `apps/api/migrations/0001_init.sql`, then import
+   a data-only export (`npm run export:data -- --no-schema`) so the schema and
+   data steps do not collide. Alternatively, import the default full export
+   directly into an empty database because it already contains both schema and
+   data.
 4. Replace the R2 bucket with an object store or local disk and keep the
    `payment-claims/{userId}/{orderNo}.{ext}` path convention.
 5. Rebuild the frontend with the new API origin:
