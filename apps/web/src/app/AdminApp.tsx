@@ -58,7 +58,10 @@ function AdminLoginNotice() {
     <section className="admin-forbidden">
       <h1>请先登录</h1>
       {notice ? <div className="alert alert--success" role="status">{notice}</div> : null}
-      <p>请先在主站登录管理员账号，再访问站长后台。</p>
+      <p>请先登录管理员账号，再访问站长后台。</p>
+      <a className="button button--primary" href={import.meta.env.BASE_URL + '#/login'}>
+        去登录
+      </a>
     </section>
   );
 }

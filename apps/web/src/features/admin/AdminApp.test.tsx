@@ -4,6 +4,16 @@ import { AdminApp } from '../../app/AdminApp';
 import { TestProviders } from '../../test/TestProviders';
 
 describe('AdminApp', () => {
+  it('offers a clickable login link when the admin is signed out', () => {
+    render(
+      <TestProviders initialEntries={['/login']}>
+        <AdminApp />
+      </TestProviders>
+    );
+    const link = screen.getByRole('link', { name: '去登录' });
+    expect(link.getAttribute('href')).toContain('#/login');
+  });
+
   it('renders the admin dashboard shell', async () => {
     render(<AdminApp />, { wrapper: TestProviders });
 

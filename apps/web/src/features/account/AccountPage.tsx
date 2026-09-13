@@ -122,6 +122,15 @@ export function AccountPage() {
           </div>
         </dl>
       </div>
+      {user.role === 'admin' ? (
+        <div className="card">
+          <h2>站长后台</h2>
+          <p>当前账号具有管理员权限，可以进入订单审核、用户管理和收入统计页面。</p>
+          <a className="button button--primary" href={import.meta.env.BASE_URL + 'admin/#/dashboard'}>
+            进入站长后台
+          </a>
+        </div>
+      ) : null}
 
       <div className="card">
         <h2>修改密码</h2>
