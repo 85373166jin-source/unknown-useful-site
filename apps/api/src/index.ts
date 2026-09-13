@@ -10,6 +10,8 @@ import { entitlementsRoutes } from './routes/entitlements';
 import { adminRoutes } from './routes/admin';
 import { ordersRoutes } from './routes/orders';
 import { progressRoutes } from './routes/progress';
+import { commentsRoutes } from './routes/comments';
+import { cleanupExpiredData } from './services/comments';
 
 for (const product of Object.values(CATALOG.products)) {
   ProductSchema.parse(product);
@@ -59,6 +61,15 @@ app.route('/api/v1/catalog', catalogRoutes);
 app.route('/api/v1/entitlements', entitlementsRoutes);
 app.route('/api/v1/orders', ordersRoutes);
 app.route('/api/v1/progress', progressRoutes);
+app.route('/api/v1', commentsRoutes);
 app.route('/api/v1/admin', adminRoutes);
 
-export default app;
+export async function scheduled(
+  _controller: ScheduledController,
+  env: Env,
+  _ctx: ExecutionContext
+): Promise<void> {
+  await cleanupExpiredData(env);
+}
+
+export default Object.assign(app, { scheduled });

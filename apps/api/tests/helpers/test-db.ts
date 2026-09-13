@@ -1,6 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 
 export const TABLES_TO_CLEAR = [
+  'comments',
   'watch_progress',
   'login_events',
   'rate_limits',
@@ -22,4 +23,3 @@ export async function resetTestDatabase(db: D1Database): Promise<void> {
     await db.prepare(`DELETE FROM ${table}`).run();
   }
 }
-

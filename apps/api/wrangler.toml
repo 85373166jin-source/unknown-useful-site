@@ -15,3 +15,6 @@ id = "411bb71f96fd446797426d4fb8d994af"
 
 [vars]
 ADMIN_USERNAME = "admin"
+
+[triggers]
+crons = ["0 * * * *"]

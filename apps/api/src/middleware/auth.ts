@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { type PermissionRole } from '@site/contracts';
 import type { Env } from '../env';
 import { findActiveSessionByTokenHash } from '../repositories/sessions';
@@ -16,27 +16,47 @@ export type AppEnv = {
   };
 };
 
-export const bearerAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+async function authenticate(c: Context<AppEnv>): Promise<boolean> {
   const authorization = c.req.header('authorization');
-  const token = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : null;
+  const token = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length).trim()
+    : null;
   if (!token) {
-    throw new ApiError('unauthorized', 'Missing or invalid bearer token', 401);
+    return false;
   }
 
   const tokenHash = await hashSessionToken(token, c.env.SESSION_PEPPER);
   const session = await findActiveSessionByTokenHash(c.env.DB, tokenHash, Date.now());
   if (!session) {
-    throw new ApiError('unauthorized', 'Invalid or expired session', 401);
+    return false;
   }
 
   const user = await findUserById(c.env.DB, session.user_id);
   if (!user || user.status !== 'active') {
-    throw new ApiError('unauthorized', 'Account is not active', 401);
+    return false;
   }
 
   c.set('userId', user.id);
   c.set('role', effectivePermissionRole(user.permission_role));
   c.set('sessionTokenHash', tokenHash);
+  return true;
+}
+
+export const bearerAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!(await authenticate(c))) {
+    throw new ApiError('unauthorized', 'Missing or invalid bearer token', 401);
+  }
+  await next();
+};
+
+export const optionalBearerAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!c.req.header('authorization')) {
+    await next();
+    return;
+  }
+  if (!(await authenticate(c))) {
+    throw new ApiError('unauthorized', 'Invalid or expired bearer token', 401);
+  }
   await next();
 };
 

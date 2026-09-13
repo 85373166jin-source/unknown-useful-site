@@ -1,8 +1,13 @@
 import { Hono, type Context } from 'hono';
-import { MembershipTierSchema, type MembershipTier } from '@site/contracts';
+import {
+  AdminCommentStatusSchema,
+  MembershipTierSchema,
+  ReviewCommentSchema,
+  type MembershipTier
+} from '@site/contracts';
 import { z } from 'zod';
 import type { AppEnv } from '../middleware/auth';
-import { bearerAuth, requireOwner } from '../middleware/auth';
+import { bearerAuth, requireAdmin, requireOwner } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
 import {
@@ -32,6 +37,7 @@ import {
   reviewPaymentClaim,
   toPaymentClaimPayload
 } from '../services/orders';
+import { deleteComment, listAdminComments, reviewComment } from '../services/comments';
 
 const reviewSchema = z
   .object({
@@ -391,6 +397,35 @@ async function singleUserPayload(env: AppEnv['Bindings'], user: UserRow): Promis
 }
 
 export const adminRoutes = new Hono<AppEnv>();
+
+adminRoutes.get('/comments', bearerAuth, requireAdmin, async (c) => {
+  const parsed = AdminCommentStatusSchema.safeParse(c.req.query('status') ?? 'pending');
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+  return c.json({ comments: await listAdminComments(c.env, parsed.data) });
+});
+
+adminRoutes.patch('/comments/:id', bearerAuth, requireAdmin, async (c) => {
+  const parsed = ReviewCommentSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+  return c.json(
+    await reviewComment(
+      c.env,
+      c.get('userId'),
+      c.req.param('id'),
+      parsed.data.decision,
+      parsed.data.rejectionReason
+    )
+  );
+});
+
+adminRoutes.delete('/comments/:id', bearerAuth, requireAdmin, async (c) => {
+  await deleteComment(c.env, c.get('userId'), c.get('role'), c.req.param('id'));
+  return c.json({ ok: true });
+});
 
 adminRoutes.get('/orders', bearerAuth, requireOwner, async (c) => {
   const claims = await listPaymentClaims(c.env);
