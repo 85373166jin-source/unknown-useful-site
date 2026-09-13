@@ -14,12 +14,18 @@ type MembershipUser = {
 function stubCurrentUser(user: MembershipUser): void {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ user }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
-    )
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('/comments')
+        ? { comments: [], canComment: false, currentStatus: 'guest' }
+        : { user };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      );
+    })
   );
 }
 
@@ -109,4 +115,21 @@ describe('MembershipPage', () => {
       '/payment-claim?productId=svip_monthly'
     );
   });
+
+  it('renders a comment section for the VIP and SVIP memberships', async () => {
+    stubCurrentUser({
+      id: 'user-1',
+      username: 'alice',
+      membershipTier: 'normal',
+      membershipExpiresAt: null,
+      membershipRemainingDays: 0
+    });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'VIP 会员评论' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'SVIP 豪华会员评论' })).toBeInTheDocument();
+  });
 });
+
+
+

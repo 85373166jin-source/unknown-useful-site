@@ -19,6 +19,16 @@ function adminUser(permissionRole: AuthUser['permissionRole']): AuthUser {
   };
 }
 
+const OWNER_ONLY_NAV = [
+  '仪表盘',
+  '订单审核',
+  '用户管理',
+  '会员管理',
+  '收入统计',
+  '审计记录',
+  '安全设置'
+];
+
 describe('AdminApp', () => {
   it('offers a clickable login link when the admin is signed out', () => {
     render(
@@ -41,6 +51,7 @@ describe('AdminApp', () => {
     expect(screen.getByText('今日收入')).toBeInTheDocument();
     expect(screen.getByText('待审核订单')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '订单审核' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '评论审核' })).toBeInTheDocument();
   });
 
   it('shows the membership management link and route to owners', async () => {
@@ -54,20 +65,43 @@ describe('AdminApp', () => {
     expect(screen.getByRole('link', { name: '会员管理' })).toBeInTheDocument();
   });
 
-  it('hides all owner-only navigation and routes from non-owner admins', async () => {
+  it('lets partner admins moderate comments but hides owner-only navigation', async () => {
+    render(
+      <TestProviders initialUser={adminUser('admin')} initialEntries={['/comments']}>
+        <AdminApp />
+      </TestProviders>
+    );
+
+    expect(await screen.findByRole('heading', { name: '评论审核' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '评论审核' })).toBeInTheDocument();
+    for (const label of OWNER_ONLY_NAV) {
+      expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument();
+    }
+  });
+
+  it('redirects partner admins away from owner-only routes', async () => {
     render(
       <TestProviders initialUser={adminUser('admin')} initialEntries={['/orders']}>
         <AdminApp />
       </TestProviders>
     );
 
+    expect(await screen.findByRole('heading', { name: '评论审核' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '订单审核' })).not.toBeInTheDocument();
+  });
+
+  it('blocks non-admin accounts from the admin app', async () => {
+    const regularUser: AuthUser = {
+      ...adminUser('user'),
+      role: 'user'
+    };
+    render(
+      <TestProviders initialUser={regularUser} initialEntries={['/comments']}>
+        <AdminApp />
+      </TestProviders>
+    );
+
     expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '仪表盘' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '订单审核' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '用户管理' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '收入统计' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '审计记录' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '安全设置' })).not.toBeInTheDocument();
-    expect(screen.queryByText('网站已确认收入')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '评论审核' })).not.toBeInTheDocument();
   });
 });

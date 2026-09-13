@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
+import { AdminComments } from '../features/admin/AdminComments';
 import { AdminDashboard } from '../features/admin/AdminDashboard';
 import { AdminMemberships } from '../features/admin/AdminMemberships';
 import { AdminOrders } from '../features/admin/AdminOrders';
@@ -15,6 +16,7 @@ interface AdminNavItem {
 }
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
+  { to: '/comments', label: '评论审核' },
   { to: '/dashboard', label: '仪表盘', ownerOnly: true },
   { to: '/orders', label: '订单审核', ownerOnly: true },
   { to: '/users', label: '用户管理', ownerOnly: true },
@@ -54,7 +56,7 @@ function AdminForbidden() {
   return (
     <section className="admin-forbidden">
       <h1>无权访问</h1>
-      <p>仅站长可访问站长后台。</p>
+      <p>仅站长和合作管理员可访问后台。</p>
     </section>
   );
 }
@@ -85,28 +87,50 @@ export function AdminApp() {
     return <AdminLoginNotice />;
   }
 
-  if (user.permissionRole !== 'owner') {
+  const isOwner = user.permissionRole === 'owner';
+  const isModerator = isOwner || user.permissionRole === 'admin';
+
+  if (!isModerator) {
     return <AdminForbidden />;
   }
 
-  const isOwner = true;
+  const fallback = isOwner ? '/dashboard' : '/comments';
 
   return (
     <Routes>
       <Route path="/login" element={<AdminLoginNotice />} />
       <Route element={<AdminLayout isOwner={isOwner} />}>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<AdminDashboard />} />
-        <Route path="/orders" element={<AdminOrders />} />
-        <Route path="/users" element={<AdminUsers />} />
+        <Route path="/" element={<Navigate to={fallback} replace />} />
+        <Route path="/comments" element={<AdminComments />} />
+        <Route
+          path="/dashboard"
+          element={isOwner ? <AdminDashboard /> : <Navigate to={fallback} replace />}
+        />
+        <Route
+          path="/orders"
+          element={isOwner ? <AdminOrders /> : <Navigate to={fallback} replace />}
+        />
+        <Route
+          path="/users"
+          element={isOwner ? <AdminUsers /> : <Navigate to={fallback} replace />}
+        />
         <Route
           path="/memberships"
-          element={isOwner ? <AdminMemberships /> : <Navigate to="/dashboard" replace />}
+          element={isOwner ? <AdminMemberships /> : <Navigate to={fallback} replace />}
         />
-        <Route path="/revenue" element={<AdminRevenue />} />
-        <Route path="/audit" element={<AdminAudit />} />
-        <Route path="/settings" element={<AdminSettings />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route
+          path="/revenue"
+          element={isOwner ? <AdminRevenue /> : <Navigate to={fallback} replace />}
+        />
+        <Route
+          path="/audit"
+          element={isOwner ? <AdminAudit /> : <Navigate to={fallback} replace />}
+        />
+        <Route
+          path="/settings"
+          element={isOwner ? <AdminSettings /> : <Navigate to={fallback} replace />}
+        />
+        <Route path="*" element={<Navigate to={fallback} replace />} />
       </Route>
     </Routes>
   );

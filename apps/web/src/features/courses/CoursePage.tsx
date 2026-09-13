@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CATALOG, type Series } from '@site/contracts';
+import { ProductComments } from '../comments/ProductComments';
 import { ApiError, apiFetch, getSessionToken } from '../../lib/api';
 
 type SeriesId = Series['id'];
@@ -151,6 +152,12 @@ export function CoursePage() {
         })}
       </div>
 
+      <div className="course-comments">
+        <ProductComments productId="super" title="超影课程评论" />
+        <ProductComments productId="anbu" title="暗部课程评论" />
+        <ProductComments productId="bundle" title="火影合集评论" />
+      </div>
+
       {activeSeries ? (
         <div
           className="course-modal"
@@ -192,4 +199,6 @@ export function CoursePage() {
     </section>
   );
 }
+
+
 

@@ -31,12 +31,18 @@ describe('CoursePage', () => {
     window.localStorage.setItem('unknown-useful-site.session', 'token');
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ unlocked: ['super'] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        })
-      )
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.includes('/comments')
+          ? { comments: [], canComment: false, currentStatus: 'guest' }
+          : { unlocked: ['super'] };
+        return Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          })
+        );
+      })
     );
 
     render(<CoursePage />, { wrapper: TestProviders });
@@ -48,4 +54,26 @@ describe('CoursePage', () => {
     expect(within(darkCourse).queryByRole('link')).not.toBeInTheDocument();
     expect(within(darkCourse).getByText('待上线')).toBeInTheDocument();
   });
+
+  it('renders a comment section for super, anbu, and bundle', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ comments: [], canComment: false, currentStatus: 'guest' }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+      )
+    );
+
+    render(<CoursePage />, { wrapper: TestProviders });
+
+    expect(screen.getByRole('heading', { name: '超影课程评论' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '暗部课程评论' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '火影合集评论' })).toBeInTheDocument();
+    expect(await screen.findAllByText('登录后评论')).toHaveLength(3);
+  });
 });
+
