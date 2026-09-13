@@ -13,10 +13,7 @@ const apiVars = [
   'SESSION_PEPPER:test-session-pepper',
   'CONTACT_HMAC_SECRET:test-contact-secret',
   'ALLOWED_ORIGINS:http://127.0.0.1:5173,http://localhost:5173',
-  'ADMIN_USERNAME:admin',
-  'ADMIN_PASSWORD_HASH:test-admin-hash',
-  'SUPER_COURSE_PASSWORD_HASH:test-super-hash',
-  'ANBU_COURSE_PASSWORD_HASH:test-anbu-hash'
+  'ADMIN_USERNAME:admin'
 ]
   .map((entry) => `--var ${entry}`)
   .join(' ');
@@ -30,7 +27,7 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     baseURL: 'http://127.0.0.1:5173',
-    channel: 'msedge',
+    channel: process.env.PLAYWRIGHT_CHANNEL ?? 'msedge',
     headless: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
@@ -40,7 +37,7 @@ export default defineConfig({
       command: `node ${seedScript} && node ${wranglerBin} dev --local --ip 127.0.0.1 --port 8787 --show-interactive-dev-session false ${apiVars}`,
       cwd: apiDir,
       url: 'http://127.0.0.1:8787/api/v1/health',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: { ...process.env, XDG_CONFIG_HOME: configHome }
     },
@@ -48,7 +45,7 @@ export default defineConfig({
       command: `node ${viteBin} --host 127.0.0.1 --port 5173 --strictPort`,
       cwd: webDir,
       url: 'http://127.0.0.1:5173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000
     }
   ]

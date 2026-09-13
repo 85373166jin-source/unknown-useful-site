@@ -42,11 +42,26 @@ npm run test:e2e
 - `npm run typecheck` 和 `npm run build` 做 TypeScript 与生产构建校验。
 - `npm run test:e2e` 使用 Playwright 启动本地 `wrangler dev --local` 与 Vite，运行 `tests/e2e` 下的真实端到端旅程。
 
+> **注意：** `npm run test:e2e` 会删除 `apps/api/.wrangler/state` 下的本地 D1 和 R2 状态，并重新应用迁移与 E2E 种子数据。不要在运行 E2E 前依赖本地 `.wrangler` 中手工写入的数据。
+
 ### Playwright 浏览器
 
-E2E 默认使用系统已安装的 Microsoft Edge（Playwright `channel: 'msedge'`），避免在受限环境中下载 Chromium。若本机没有 Edge，可在 `playwright.config.ts` 中改用已安装的 Chrome channel，或先运行 `npx playwright install chromium`。
+E2E 默认使用系统已安装的 Microsoft Edge。可以通过 `PLAYWRIGHT_CHANNEL` 覆盖：
 
-在无网络下载 Playwright npm 包的环境中，测试脚本按 `node_modules/playwright/cli.js test` 运行；Playwright 1.62+ 的 `playwright` 包内置 test runner。正常联网环境直接安装 Playwright 测试依赖即可。
+```powershell
+$env:PLAYWRIGHT_CHANNEL = "chrome"     # 使用已安装的系统 Chrome
+$env:PLAYWRIGHT_CHANNEL = "msedge"     # 使用已安装的系统 Edge（默认）
+npm run test:e2e
+```
+
+在 Linux/CI 上没有系统 Edge/Chrome 时，先安装 Playwright 自带的 Chromium，然后使用 chromium channel：
+
+```bash
+npx playwright install chromium
+PLAYWRIGHT_CHANNEL=chromium npm run test:e2e
+```
+
+`playwright` 已在根 `package.json` 与 `package-lock.json` 中声明，`npm install` 后即可通过 `npx playwright` 调用。
 
 ## 安全边界
 

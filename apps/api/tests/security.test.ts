@@ -10,6 +10,7 @@ async function createTestUserAndSession(env: Env) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ username: 'security-user', password: 'long-password-123' })
   }, env);
+  expect(response.status).toBe(201);
   return response.json<{ token: string }>();
 }
 
