@@ -12,7 +12,9 @@
     "deploy:api": "npm run deploy --workspace @site/api",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @site/api",
     "db:seed:remote": "npm run db:seed:remote --workspace @site/api",
-    "export:data": "node scripts/export-d1.mjs"
+    "export:data": "node scripts/export-d1.mjs",
+    "test:e2e": "node node_modules/playwright/cli.js test",
+    "test:e2e:report": "node node_modules/playwright/cli.js show-report"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

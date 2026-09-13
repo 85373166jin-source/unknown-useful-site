@@ -8,3 +8,5 @@ dist/
 !.env.example
 work/
 outputs/
+test-results/
+playwright-report/
