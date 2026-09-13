@@ -3,9 +3,10 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
-import { findUserById } from '../repositories/users';
+import { buildUpdateUserMembershipStatement, findUserById } from '../repositories/users';
 import {
   findPaymentClaimByOrderNo,
+  buildUpdatePaymentClaimReviewStatement,
   findProductById,
   insertOrderEntitlement,
   insertPaymentClaim,
@@ -17,7 +18,7 @@ import {
   type PaymentClaimRow
 } from '../repositories/orders';
 import { recordAudit } from './audit';
-import { effectiveMembership } from './membership';
+import { applyMembershipPurchase, effectiveMembership } from './membership';
 import { priceProductForUser } from './pricing';
 
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
@@ -28,6 +29,11 @@ export const SCREENSHOT_EXTENSIONS: Record<string, string> = {
 };
 
 const CLAIMABLE_PRODUCT_STATUSES = new Set(['active', 'presale']);
+
+const MEMBERSHIP_PURCHASE_TIERS: Partial<Record<ProductId, 'vip' | 'svip'>> = {
+  vip_monthly: 'vip',
+  svip_monthly: 'svip'
+};
 
 export interface CreatePaymentClaimInput {
   productId: string;
@@ -322,7 +328,43 @@ async function approvePaymentClaim(
   note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
-  const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
+  const purchasedTier = MEMBERSHIP_PURCHASE_TIERS[claim.product_id as ProductId];
+  let membershipBefore: { tier: 'normal' | 'vip' | 'svip'; expiresAt: number | null } | null = null;
+  let membershipAfter: { tier: 'vip' | 'svip'; expiresAt: number } | null = null;
+  let membershipStatement: ReturnType<typeof buildUpdateUserMembershipStatement> | null = null;
+
+  if (purchasedTier) {
+    const user = await findUserById(env.DB, claim.user_id);
+    if (!user) {
+      throw new ApiError('user_not_found', 'User not found', 404);
+    }
+
+    const effective = effectiveMembership(
+      { tier: user.membership_tier, expiresAt: user.membership_expires_at },
+      now
+    );
+    let nextMembership;
+    try {
+      nextMembership = applyMembershipPurchase(effective, purchasedTier, now);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'SVIP cannot downgrade to VIP') {
+        throw new ApiError('membership_downgrade', 'SVIP cannot be downgraded to VIP', 409);
+      }
+      throw error;
+    }
+
+    membershipBefore = effective;
+    membershipAfter = nextMembership;
+    membershipStatement = buildUpdateUserMembershipStatement(
+      env.DB,
+      claim.user_id,
+      nextMembership.tier,
+      nextMembership.expiresAt,
+      now
+    );
+  }
+
+  const reviewStatement = buildUpdatePaymentClaimReviewStatement(env.DB, claim.order_no, {
     status: 'approved',
     actualAmountYuan,
     actualAmountCents,
@@ -332,24 +374,49 @@ async function approvePaymentClaim(
     reviewedAt: now,
     updatedAt: now
   });
+  await env.DB.batch(
+    membershipStatement ? [reviewStatement, membershipStatement] : [reviewStatement]
+  );
 
-  const productIds = await entitledProductIds(env.DB, claim.product_id);
-  for (const productId of productIds) {
-    await insertOrderEntitlement(env.DB, {
-      userId: claim.user_id,
-      productId,
-      orderId: claim.id,
-      createdAt: now
-    });
+  const updated = await findPaymentClaimByOrderNo(env.DB, claim.order_no);
+  if (!updated) {
+    throw new Error('Failed to load the updated payment claim');
   }
+
+  if (!purchasedTier) {
+    const productIds = await entitledProductIds(env.DB, claim.product_id);
+    for (const productId of productIds) {
+      await insertOrderEntitlement(env.DB, {
+        userId: claim.user_id,
+        productId,
+        orderId: claim.id,
+        createdAt: now
+      });
+    }
+  }
+
+  const beforeAudit = membershipBefore
+    ? {
+        ...toPaymentClaimAudit(claim),
+        membershipTier: membershipBefore.tier,
+        membershipExpiresAt: membershipBefore.expiresAt
+      }
+    : toPaymentClaimAudit(claim);
+  const afterAudit = membershipAfter
+    ? {
+        ...toPaymentClaimAudit(updated),
+        membershipTier: membershipAfter.tier,
+        membershipExpiresAt: membershipAfter.expiresAt
+      }
+    : toPaymentClaimAudit(updated);
 
   await recordAudit(env, {
     actorUserId: reviewerUserId,
     action: 'order.approved',
     entityType: 'payment_claim',
     entityId: claim.order_no,
-    before: toPaymentClaimAudit(claim),
-    after: toPaymentClaimAudit(updated)
+    before: beforeAudit,
+    after: afterAudit
   });
 
   return updated;

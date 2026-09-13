@@ -7,6 +7,7 @@ import { HomePage } from '../features/catalog/HomePage';
 import { CoursePage } from '../features/courses/CoursePage';
 import { LessonPage } from '../features/courses/LessonPage';
 import { StaticContentPage } from '../features/content/StaticContentPage';
+import { MembershipPage } from '../features/membership/MembershipPage';
 import { AuthProvider } from '../lib/auth-context';
 import { PublicApp } from './PublicApp';
 
@@ -25,6 +26,14 @@ export function PublicRoutes() {
               element={
                 <ProtectedRoute>
                   <AccountPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/membership"
+              element={
+                <ProtectedRoute>
+                  <MembershipPage />
                 </ProtectedRoute>
               }
             />

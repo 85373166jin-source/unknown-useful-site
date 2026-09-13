@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { MembershipTierSchema, type MembershipTier } from '@site/contracts';
 import { z } from 'zod';
 import type { AppEnv } from '../middleware/auth';
 import { bearerAuth, requireOwner } from '../middleware/auth';
@@ -6,6 +7,7 @@ import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
 import {
   buildUpdateUserPasswordStatement,
+  buildUpdateUserMembershipStatement,
   findUserById,
   findUserByUsername,
   insertAdminEntitlement,
@@ -21,6 +23,7 @@ import {
 import { buildDeleteAllSessionsStatement } from '../repositories/sessions';
 import { hashPassword } from '../services/password';
 import { recordAudit } from '../services/audit';
+import { effectiveMembership, membershipRemainingDays } from '../services/membership';
 import { classifyLoginRisk, type RiskLevel } from '../services/risk';
 import { getDashboard, getRevenueReport } from '../services/revenue';
 import {
@@ -74,6 +77,28 @@ const userMutationSchema = z
     { message: 'Specify exactly one user mutation' }
   );
 
+const membershipCorrectionSchema = z
+  .object({
+    tier: MembershipTierSchema,
+    expiresAt: z.number().int().nonnegative().nullable()
+  })
+  .superRefine((value, ctx) => {
+    if (value.tier === 'normal' && value.expiresAt !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Normal membership cannot have an expiry',
+        path: ['expiresAt']
+      });
+    }
+    if (value.tier !== 'normal' && value.expiresAt === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Paid membership requires an expiry',
+        path: ['expiresAt']
+      });
+    }
+  });
+
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(128)
 });
@@ -104,6 +129,9 @@ interface AdminUserPayload {
   lastLoginAt: number | null;
   riskLevel: RiskLevel;
   entitlements: string[];
+  membershipTier: MembershipTier;
+  membershipExpiresAt: number | null;
+  membershipRemainingDays: number;
 }
 
 interface RiskInfo {
@@ -173,6 +201,20 @@ async function buildLoginState(env: AppEnv['Bindings']): Promise<LoginState> {
   return { riskMap, lastLoginMap };
 }
 
+function membershipPayload(user: {
+  membership_tier: MembershipTier;
+  membership_expires_at: number | null;
+}): Pick<AdminUserPayload, 'membershipTier' | 'membershipExpiresAt' | 'membershipRemainingDays'> {
+  const now = Date.now();
+  const membership = { tier: user.membership_tier, expiresAt: user.membership_expires_at };
+  const effective = effectiveMembership(membership, now);
+  return {
+    membershipTier: effective.tier,
+    membershipExpiresAt: effective.expiresAt,
+    membershipRemainingDays: membershipRemainingDays(membership, now)
+  };
+}
+
 function toAdminUserPayload(
   user: UserRow,
   entitlements: string[],
@@ -189,7 +231,8 @@ function toAdminUserPayload(
     createdAt: user.created_at,
     lastLoginAt,
     riskLevel: risk?.riskLevel ?? 'none',
-    entitlements
+    entitlements,
+    ...membershipPayload(user)
   };
 }
 
@@ -209,7 +252,8 @@ function adminUserRowToPayload(
     createdAt: row.created_at,
     lastLoginAt,
     riskLevel: risk?.riskLevel ?? 'none',
-    entitlements
+    entitlements,
+    ...membershipPayload(row)
   };
 }
 
@@ -480,6 +524,51 @@ adminRoutes.patch('/security', bearerAuth, requireOwner, async (c) => {
   });
 
   return c.json({ ok: true, requireLogin: usernameChanged || passwordChanged });
+});
+
+adminRoutes.patch('/users/:id/membership', bearerAuth, requireOwner, async (c) => {
+  const parsed = membershipCorrectionSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const target = await requireTargetUser(c.env, c.req.param('id'));
+  const now = Date.now();
+  const beforeMembership = effectiveMembership(
+    { tier: target.membership_tier, expiresAt: target.membership_expires_at },
+    now
+  );
+  const expiresAt = parsed.data.tier === 'normal' ? null : parsed.data.expiresAt;
+
+  await buildUpdateUserMembershipStatement(
+    c.env.DB,
+    target.id,
+    parsed.data.tier,
+    expiresAt,
+    now
+  ).run();
+
+  const updated = await requireTargetUser(c.env, target.id);
+  const afterMembership = effectiveMembership(
+    { tier: updated.membership_tier, expiresAt: updated.membership_expires_at },
+    now
+  );
+  await recordAudit(c.env, {
+    actorUserId: c.get('userId'),
+    action: 'admin.user.membership',
+    entityType: 'user',
+    entityId: target.id,
+    before: {
+      membershipTier: beforeMembership.tier,
+      membershipExpiresAt: beforeMembership.expiresAt
+    },
+    after: {
+      membershipTier: afterMembership.tier,
+      membershipExpiresAt: afterMembership.expiresAt
+    }
+  });
+
+  return c.json({ user: await singleUserPayload(c.env, updated) });
 });
 
 adminRoutes.patch('/users/:id', bearerAuth, requireOwner, async (c) => {

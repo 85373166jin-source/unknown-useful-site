@@ -221,6 +221,8 @@ export interface AdminUserRow {
   status: UserStatus;
   phone_mask: string | null;
   email_mask: string | null;
+  membership_tier: MembershipTier;
+  membership_expires_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -233,7 +235,7 @@ export interface LoginEventRow {
   at: number;
 }
 
-const ADMIN_USER_COLUMNS = 'id, username, role, status, phone_mask, email_mask, created_at, updated_at';
+const ADMIN_USER_COLUMNS = 'id, username, role, status, phone_mask, email_mask, membership_tier, membership_expires_at, created_at, updated_at';
 
 export async function listAllUsersForAdmin(db: D1Database): Promise<AdminUserRow[]> {
   const result = await db

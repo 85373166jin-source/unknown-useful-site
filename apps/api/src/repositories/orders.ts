@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { ProductType } from '@site/contracts';
 
 export type PaymentClaimStatus = 'pending' | 'approved' | 'rejected';
@@ -180,12 +180,12 @@ export async function listProductComponentIds(
   return (result.results ?? []).map((row) => row.child_product_id);
 }
 
-export async function updatePaymentClaimReview(
+export function buildUpdatePaymentClaimReviewStatement(
   db: D1Database,
   orderNo: string,
   input: UpdatePaymentClaimReviewInput
-): Promise<PaymentClaimRow> {
-  await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `UPDATE payment_claims
        SET actual_amount_yuan = ?,
@@ -208,8 +208,15 @@ export async function updatePaymentClaimReview(
       input.reviewedAt,
       input.updatedAt,
       orderNo
-    )
-    .run();
+    );
+}
+
+export async function updatePaymentClaimReview(
+  db: D1Database,
+  orderNo: string,
+  input: UpdatePaymentClaimReviewInput
+): Promise<PaymentClaimRow> {
+  await buildUpdatePaymentClaimReviewStatement(db, orderNo, input).run();
 
   const updated = await findPaymentClaimByOrderNo(db, orderNo);
   if (!updated) {
