@@ -166,7 +166,11 @@ export function PaymentClaimPage() {
             <select
               id="payment-product"
               value={productId}
-              onChange={(event) => setProductId(event.target.value as ClaimableProductId)}
+              onChange={(event) => {
+                setProductId(event.target.value as ClaimableProductId);
+                setResult(null);
+                setError(null);
+              }}
             >
               {CLAIMABLE_PRODUCTS.map((product) => (
                 <option key={product.id} value={product.id}>

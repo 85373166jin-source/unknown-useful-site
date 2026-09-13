@@ -17,7 +17,6 @@ const TEST_USER_1: AuthUser = {
   membershipTier: 'normal',
   membershipExpiresAt: null,
   membershipRemainingDays: 0,
-  partnerLevel: 'none',
   phoneMask: null,
   emailMask: null,
   createdAt: 0
@@ -31,7 +30,6 @@ const TEST_USER_2: AuthUser = {
   membershipTier: 'normal',
   membershipExpiresAt: null,
   membershipRemainingDays: 0,
-  partnerLevel: 'none',
   phoneMask: null,
   emailMask: null,
   createdAt: 0

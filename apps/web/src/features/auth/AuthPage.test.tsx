@@ -24,7 +24,6 @@ function stubLogin(): void {
             membershipTier: 'normal',
             membershipExpiresAt: null,
             membershipRemainingDays: 0,
-            partnerLevel: 'none',
             phoneMask: null,
             emailMask: null,
             createdAt: 1_700_000_000_000

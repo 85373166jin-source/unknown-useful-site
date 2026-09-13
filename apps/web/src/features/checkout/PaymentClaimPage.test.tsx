@@ -119,5 +119,44 @@ describe('PaymentClaimPage', () => {
     expect(screen.getByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
     expect(screen.getByText('当前应付：23.20 元')).toBeInTheDocument();
   });
+
+  it('clears server-returned amounts when the selected product changes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          orderNo: 'HY-20260912-IJKL',
+          status: 'pending',
+          listAmountCents: 2900,
+          actualAmountCents: 2320
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=super']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
+    fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
+    const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
+    Object.defineProperty(screenshotInput, 'files', {
+      value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
+      configurable: true
+    });
+    fireEvent.change(screenshotInput);
+    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
+
+    expect(await screen.findByText('当前应付：23.20 元')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('产品'), { target: { value: 'bundle' } });
+
+    expect(screen.getByLabelText('产品')).toHaveValue('bundle');
+    expect(screen.getByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
+    expect(screen.queryByText('当前应付：23.20 元')).not.toBeInTheDocument();
+  });
 });
 

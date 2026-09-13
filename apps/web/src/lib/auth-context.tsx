@@ -27,7 +27,7 @@ export interface AuthUser {
   membershipTier: MembershipTier;
   membershipExpiresAt: number | null;
   membershipRemainingDays: number;
-  partnerLevel: PartnerLevel;
+  partnerLevel?: PartnerLevel | undefined;
   phoneMask: string | null;
   emailMask: string | null;
   createdAt: number;

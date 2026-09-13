@@ -20,7 +20,6 @@ const user: AuthUser = {
   membershipTier: 'vip',
   membershipExpiresAt: 1_700_000_000_000 + 23 * 24 * 60 * 60 * 1000,
   membershipRemainingDays: 23,
-  partnerLevel: 'advanced',
   phoneMask: null,
   emailMask: null,
   createdAt: 1_700_000_000_000
@@ -44,7 +43,7 @@ describe('AccountPage', () => {
     expect(screen.getByRole('link', { name: '进入站长后台' }).getAttribute('href')).toContain('admin/#/dashboard');
   });
 
-  it('shows identity, membership, and partner levels in separate blocks', () => {
+  it('shows an omitted partner level as not opened without inventing an API value', () => {
     render(
       <TestProviders initialUser={user} initialEntries={['/account']}>
         <Routes><Route path="/account" element={<AccountPage />} /></Routes>
@@ -56,7 +55,7 @@ describe('AccountPage', () => {
     expect(screen.getByText('合作等级')).toBeInTheDocument();
     expect(screen.getByText('会员剩余 23 天')).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
-    expect(screen.getByText('高级合作商')).toBeInTheDocument();
+    expect(screen.getByText('未开通')).toBeInTheDocument();
   });
 
   it('clears the revoked session and shows a notice after password change', async () => {

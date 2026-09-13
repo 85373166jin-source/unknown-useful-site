@@ -27,6 +27,8 @@ const PARTNER_LEVEL_LABELS: Record<PartnerLevel, string> = {
   top: '顶级合作商'
 };
 
+const DEFAULT_PARTNER_LEVEL: PartnerLevel = 'none';
+
 export function AccountPage() {
   const { user, logout, updateAccount, clearSession } = useAuth();
   const navigate = useNavigate();
@@ -50,7 +52,7 @@ export function AccountPage() {
     membershipTier === 'normal' || user.membershipExpiresAt === null
       ? null
       : formatCreatedAt(user.membershipExpiresAt);
-  const partnerLevel: PartnerLevel = user.partnerLevel ?? 'none';
+  const partnerLevel: PartnerLevel = user.partnerLevel ?? DEFAULT_PARTNER_LEVEL;
 
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
