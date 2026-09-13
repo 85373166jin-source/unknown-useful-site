@@ -20,8 +20,19 @@ describe('PaymentClaimPage', () => {
     expect(screen.getByAltText('微信收款码')).toHaveAttribute('src', paymentQrUrls().wechat);
     expect(screen.getByAltText('支付宝收款码')).toHaveAttribute('src', paymentQrUrls().alipay);
     expect(screen.getByLabelText('产品')).toHaveValue('bundle');
-    expect(screen.getByText((_, element) => element?.textContent === '当前标价：49 元')).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交付款申请' })).toBeInTheDocument();
+  });
+
+  it('opens membership purchase links with the exact membership list price', () => {
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=vip_monthly']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    expect(screen.getByLabelText('产品')).toHaveValue('vip_monthly');
+    expect(screen.getByText((_, element) => element?.textContent === '当前标价：9.90 元')).toBeInTheDocument();
   });
 
   it('resolves the fallback QR from the configured base path', () => {
@@ -72,6 +83,41 @@ describe('PaymentClaimPage', () => {
     });
     expect(screen.getByText(/待审核/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders', expect.anything());
+  });
+
+  it('displays the exact list and payable cents returned by the server', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          orderNo: 'HY-20260912-EFGH',
+          status: 'pending',
+          listAmountCents: 2900,
+          actualAmountCents: 2320
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=super']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
+    fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
+    const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
+    Object.defineProperty(screenshotInput, 'files', {
+      value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
+      configurable: true
+    });
+    fireEvent.change(screenshotInput);
+    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
+
+    expect(await screen.findByText(/HY-20260912-EFGH/)).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
+    expect(screen.getByText('当前应付：23.20 元')).toBeInTheDocument();
   });
 });
 

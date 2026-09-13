@@ -42,7 +42,7 @@ function safeReturnTo(raw: string | null): string {
   if (raw && raw.startsWith('/') && !raw.startsWith('//')) {
     return raw;
   }
-  return '/account';
+  return '/';
 }
 
 export function AuthPage({ mode }: AuthPageProps) {
@@ -64,7 +64,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   });
   const [riskWarning, setRiskWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const pendingTarget = useRef('/account');
+  const pendingTarget = useRef('/');
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

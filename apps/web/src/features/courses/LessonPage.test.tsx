@@ -13,6 +13,11 @@ const TEST_USER_1: AuthUser = {
   id: 'user-1',
   username: 'alice',
   role: 'user',
+  permissionRole: 'user',
+  membershipTier: 'normal',
+  membershipExpiresAt: null,
+  membershipRemainingDays: 0,
+  partnerLevel: 'none',
   phoneMask: null,
   emailMask: null,
   createdAt: 0
@@ -22,6 +27,11 @@ const TEST_USER_2: AuthUser = {
   id: 'user-2',
   username: 'bob',
   role: 'user',
+  permissionRole: 'user',
+  membershipTier: 'normal',
+  membershipExpiresAt: null,
+  membershipRemainingDays: 0,
+  partnerLevel: 'none',
   phoneMask: null,
   emailMask: null,
   createdAt: 0

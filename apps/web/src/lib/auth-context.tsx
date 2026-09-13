@@ -8,6 +8,7 @@ import {
   type ReactNode
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import type { MembershipTier, PartnerLevel, PermissionRole } from '@site/contracts';
 import {
   AUTH_EXPIRED_EVENT,
   apiFetch,
@@ -22,6 +23,11 @@ export interface AuthUser {
   id: string;
   username: string;
   role: AuthRole;
+  permissionRole: PermissionRole;
+  membershipTier: MembershipTier;
+  membershipExpiresAt: number | null;
+  membershipRemainingDays: number;
+  partnerLevel: PartnerLevel;
   phoneMask: string | null;
   emailMask: string | null;
   createdAt: number;

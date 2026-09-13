@@ -1,11 +1,31 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import type { MembershipTier, PartnerLevel, PermissionRole } from '@site/contracts';
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 
 function formatCreatedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN');
 }
+
+const PERMISSION_ROLE_LABELS: Record<PermissionRole, string> = {
+  user: '用户',
+  admin: '管理员',
+  owner: '站长'
+};
+
+const MEMBERSHIP_TIER_LABELS: Record<MembershipTier, string> = {
+  normal: '普通会员',
+  vip: 'VIP',
+  svip: 'SVIP'
+};
+
+const PARTNER_LEVEL_LABELS: Record<PartnerLevel, string> = {
+  none: '未开通',
+  basic: '基础合作商',
+  advanced: '高级合作商',
+  top: '顶级合作商'
+};
 
 export function AccountPage() {
   const { user, logout, updateAccount, clearSession } = useAuth();
@@ -21,6 +41,16 @@ export function AccountPage() {
   if (!user) {
     return null;
   }
+
+  const permissionRole: PermissionRole =
+    user.permissionRole ?? (user.role === 'admin' ? 'owner' : 'user');
+  const membershipTier: MembershipTier = user.membershipTier ?? 'normal';
+  const membershipRemainingDays = user.membershipRemainingDays ?? 0;
+  const membershipExpiresAt =
+    membershipTier === 'normal' || user.membershipExpiresAt === null
+      ? null
+      : formatCreatedAt(user.membershipExpiresAt);
+  const partnerLevel: PartnerLevel = user.partnerLevel ?? 'none';
 
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,10 +135,6 @@ export function AccountPage() {
             <dd>{user.username}</dd>
           </div>
           <div>
-            <dt>角色</dt>
-            <dd>{user.role === 'admin' ? '管理员' : '用户'}</dd>
-          </div>
-          <div>
             <dt>注册时间</dt>
             <dd>{formatCreatedAt(user.createdAt)}</dd>
           </div>
@@ -122,7 +148,45 @@ export function AccountPage() {
           </div>
         </dl>
       </div>
-      {user.role === 'admin' ? (
+
+      <div className="account-identity-grid">
+        <section className="card account-identity-block">
+          <h2>身份角色</h2>
+          <p className="account-identity-block__value">{PERMISSION_ROLE_LABELS[permissionRole]}</p>
+        </section>
+
+        <section className="card account-identity-block">
+          <h2>会员等级</h2>
+          <p className="account-identity-block__value">{MEMBERSHIP_TIER_LABELS[membershipTier]}</p>
+          {membershipTier === 'normal' ? (
+            <>
+              <p className="account-identity-block__detail">尚未开通会员</p>
+              <p className="account-identity-block__advice">开通后可享受符合范围商品折扣</p>
+              <Link to="/membership">开通会员</Link>
+            </>
+          ) : (
+            <>
+              <p className="account-identity-block__detail">
+                会员剩余 {membershipRemainingDays} 天
+              </p>
+              {membershipExpiresAt ? <p>到期时间：{membershipExpiresAt}</p> : null}
+              {membershipRemainingDays <= 7 ? (
+                <p className="account-renewal-reminder">会员即将到期，建议及时续费</p>
+              ) : (
+                <p className="account-identity-block__advice">到期前可前往会员中心续费</p>
+              )}
+              <Link to="/membership">前往会员中心</Link>
+            </>
+          )}
+        </section>
+
+        <section className="card account-identity-block">
+          <h2>合作等级</h2>
+          <p className="account-identity-block__value">{PARTNER_LEVEL_LABELS[partnerLevel]}</p>
+        </section>
+      </div>
+
+      {permissionRole === 'owner' ? (
         <div className="card account-admin-entry">
           <h2>站长后台</h2>
           <p>当前账号具有管理员权限，可以进入订单审核、用户管理和收入统计页面。</p>

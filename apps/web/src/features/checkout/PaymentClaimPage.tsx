@@ -1,17 +1,43 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CATALOG, type CourseProductId, type Product } from '@site/contracts';
+import { CATALOG, centsToYuanString, type CourseProductId } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
-const CLAIMABLE_PRODUCTS = (Object.keys(CATALOG.products) as CourseProductId[])
-  .map((id) => CATALOG.products[id])
-  .filter((product) => product.status !== 'coming_soon');
+type ClaimableProductId = CourseProductId | 'vip_monthly' | 'svip_monthly';
 
-const CLAIMABLE_PRODUCT_IDS = new Set<CourseProductId>(CLAIMABLE_PRODUCTS.map((product) => product.id));
+interface ClaimableProduct {
+  id: ClaimableProductId;
+  title: string;
+  priceCents: number;
+  status: 'active' | 'presale';
+}
+
+const COURSE_PRODUCTS: ClaimableProduct[] = (Object.keys(CATALOG.products) as CourseProductId[])
+  .map((id) => CATALOG.products[id])
+  .filter((product) => product.status !== 'coming_soon')
+  .map((product) => ({
+    id: product.id,
+    title: product.title,
+    priceCents: product.priceYuan * 100,
+    status: product.status
+  }));
+
+const MEMBERSHIP_PRODUCTS: ClaimableProduct[] = [
+  { id: 'vip_monthly', title: 'VIP 会员', priceCents: 990, status: 'active' },
+  { id: 'svip_monthly', title: 'SVIP 豪华会员', priceCents: 1990, status: 'active' }
+];
+
+const CLAIMABLE_PRODUCTS = [...COURSE_PRODUCTS, ...MEMBERSHIP_PRODUCTS];
+
+const CLAIMABLE_PRODUCT_IDS = new Set<ClaimableProductId>(
+  CLAIMABLE_PRODUCTS.map((product) => product.id)
+);
 
 interface ClaimPayload {
   orderNo: string;
   status: string;
+  listAmountCents: number;
+  actualAmountCents: number | null;
 }
 
 function toLocalDateTimeInputValue(date: Date): string {
@@ -33,17 +59,21 @@ export function paymentQrUrls(baseUrl = import.meta.env.BASE_URL): { wechat: str
   };
 }
 
-function validInitialProductId(value: string | null): CourseProductId {
-  if (value && CLAIMABLE_PRODUCT_IDS.has(value as CourseProductId)) {
-    return value as CourseProductId;
+function validInitialProductId(value: string | null): ClaimableProductId {
+  if (value && CLAIMABLE_PRODUCT_IDS.has(value as ClaimableProductId)) {
+    return value as ClaimableProductId;
   }
   return 'bundle';
+}
+
+function formatCents(cents: number): string {
+  return centsToYuanString(cents);
 }
 
 export function PaymentClaimPage() {
   const [searchParams] = useSearchParams();
   const initialProductId = validInitialProductId(searchParams.get('productId'));
-  const [productId, setProductId] = useState<CourseProductId>(initialProductId);
+  const [productId, setProductId] = useState<ClaimableProductId>(initialProductId);
   const [paidAt, setPaidAt] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [contactText, setContactText] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -52,7 +82,8 @@ export function PaymentClaimPage() {
   const [result, setResult] = useState<ClaimPayload | null>(null);
 
   const qrUrls = paymentQrUrls();
-  const selectedProduct = CATALOG.products[productId];
+  const selectedProduct =
+    CLAIMABLE_PRODUCTS.find((product) => product.id === productId) ?? CLAIMABLE_PRODUCTS[0]!;
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -135,17 +166,25 @@ export function PaymentClaimPage() {
             <select
               id="payment-product"
               value={productId}
-              onChange={(event) => setProductId(event.target.value as CourseProductId)}
+              onChange={(event) => setProductId(event.target.value as ClaimableProductId)}
             >
-              {CLAIMABLE_PRODUCTS.map((product: Product) => (
+              {CLAIMABLE_PRODUCTS.map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.title}（{product.priceYuan} 元）
+                  {product.title}（{formatCents(product.priceCents)} 元）
                 </option>
               ))}
             </select>
           </div>
 
-          <p className="payment-claim-form__price">当前标价：{selectedProduct.priceYuan} 元</p>
+          <p className="payment-claim-form__price">
+            当前标价：
+            {formatCents(result?.listAmountCents ?? selectedProduct.priceCents)} 元
+          </p>
+          {result?.actualAmountCents !== null && result?.actualAmountCents !== undefined ? (
+            <p className="payment-claim-form__payable">
+              当前应付：{formatCents(result.actualAmountCents)} 元
+            </p>
+          ) : null}
 
           <div className="field">
             <label htmlFor="payment-paid-at">付款时间</label>

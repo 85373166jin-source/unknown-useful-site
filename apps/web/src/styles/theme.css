@@ -252,3 +252,45 @@
 
 .account-admin-entry p { margin-bottom: 16px; }
 .account-admin-entry .button { margin-top: 4px; }
+
+.account-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.account-identity-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.account-identity-block__value {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.account-identity-block__detail,
+.account-identity-block__advice {
+  color: var(--muted);
+}
+
+.account-renewal-reminder {
+  border-radius: var(--radius);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+}
+
+.payment-claim-form__payable {
+  color: var(--brand-purple);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .account-identity-grid {
+    grid-template-columns: 1fr;
+  }
+}
