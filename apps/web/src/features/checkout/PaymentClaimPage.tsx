@@ -21,9 +21,16 @@ function toLocalDateTimeInputValue(date: Date): string {
   )}:${pad(date.getMinutes())}`;
 }
 
-export function paymentQrFallback(baseUrl = import.meta.env.BASE_URL): string {
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return `${normalizedBase}payment-qr.svg`;
+export function paymentQrFallback(filename: string, baseUrl = import.meta.env.BASE_URL): string {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+  return normalizedBase + filename;
+}
+
+export function paymentQrUrls(baseUrl = import.meta.env.BASE_URL): { wechat: string; alipay: string } {
+  return {
+    wechat: import.meta.env.VITE_WECHAT_PAYMENT_QR_URL || paymentQrFallback('payment-wechat.jpg', baseUrl),
+    alipay: import.meta.env.VITE_ALIPAY_PAYMENT_QR_URL || paymentQrFallback('payment-alipay.jpg', baseUrl)
+  };
 }
 
 function validInitialProductId(value: string | null): ProductId {
@@ -44,7 +51,7 @@ export function PaymentClaimPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClaimPayload | null>(null);
 
-  const qrUrl = import.meta.env.VITE_PAYMENT_QR_URL || paymentQrFallback();
+  const qrUrls = paymentQrUrls();
   const selectedProduct = CATALOG.products[productId];
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -95,8 +102,17 @@ export function PaymentClaimPage() {
       <div className="payment-claim-layout">
         <aside className="card payment-claim-qr">
           <h2>收款码</h2>
-          <img className="payment-claim-qr__image" src={qrUrl} alt="收款码" />
-          <p className="payment-claim-qr__hint">转账备注请填写订单号</p>
+          <div className="payment-claim-qr__grid">
+            <figure className="payment-claim-qr__option">
+              <img className="payment-claim-qr__image" src={qrUrls.wechat} alt="微信收款码" />
+              <figcaption>微信支付</figcaption>
+            </figure>
+            <figure className="payment-claim-qr__option">
+              <img className="payment-claim-qr__image" src={qrUrls.alipay} alt="支付宝收款码" />
+              <figcaption>支付宝</figcaption>
+            </figure>
+          </div>
+          <p className="payment-claim-qr__hint">请先付款，再在右侧提交付款信息</p>
         </aside>
 
         <form className="card form payment-claim-form" onSubmit={submit}>

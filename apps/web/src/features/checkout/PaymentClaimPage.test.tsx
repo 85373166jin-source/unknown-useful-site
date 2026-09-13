@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '../../test/TestProviders';
-import { PaymentClaimPage, paymentQrFallback } from './PaymentClaimPage';
+import { PaymentClaimPage, paymentQrFallback, paymentQrUrls } from './PaymentClaimPage';
 
 afterEach(() => {
   cleanup();
@@ -17,15 +17,16 @@ describe('PaymentClaimPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: '付款申请' })).toBeInTheDocument();
-    expect(screen.getByAltText('收款码')).toHaveAttribute('src', paymentQrFallback());
+    expect(screen.getByAltText('微信收款码')).toHaveAttribute('src', paymentQrUrls().wechat);
+    expect(screen.getByAltText('支付宝收款码')).toHaveAttribute('src', paymentQrUrls().alipay);
     expect(screen.getByLabelText('产品')).toHaveValue('bundle');
     expect(screen.getByText((_, element) => element?.textContent === '当前标价：49 元')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交付款申请' })).toBeInTheDocument();
   });
 
   it('resolves the fallback QR from the configured base path', () => {
-    expect(paymentQrFallback('/')).toBe('/payment-qr.svg');
-    expect(paymentQrFallback('/unknown-useful-site/')).toBe('/unknown-useful-site/payment-qr.svg');
+    expect(paymentQrFallback('payment-wechat.jpg', '/')).toBe('/payment-wechat.jpg');
+    expect(paymentQrFallback('payment-alipay.jpg', '/unknown-useful-site/')).toBe('/unknown-useful-site/payment-alipay.jpg');
   });
 
   it('omits coming-soon products and falls back to a claimable product', () => {

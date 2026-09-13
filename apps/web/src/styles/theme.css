@@ -243,3 +243,9 @@
     white-space: nowrap;
   }
 }
+.payment-claim-qr__grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.payment-claim-qr__option { margin:0; display:grid; gap:8px; justify-items:center; }
+.payment-claim-qr__option figcaption { font-weight:700; color:var(--text); }
+.payment-claim-qr__image { width:100%; max-width:260px; border-radius:12px; background:#fff; padding:6px; box-shadow:var(--shadow-card); }
+.payment-claim-qr__hint { margin-top:16px; }
+@media (max-width:760px) { .payment-claim-qr__grid { grid-template-columns:1fr; } }

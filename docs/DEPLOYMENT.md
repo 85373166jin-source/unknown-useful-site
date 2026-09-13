@@ -46,19 +46,22 @@ The deploy workflow reads two GitHub Actions repository variables from the
    - Name: `VITE_API_BASE_URL`
    - Value: `https://unknown-useful-site-api.<your-subdomain>.workers.dev/api/v1`
 
-4. Add `VITE_PAYMENT_QR_URL` (optional):
+4. Optionally add `VITE_WECHAT_PAYMENT_QR_URL` and `VITE_ALIPAY_PAYMENT_QR_URL` when the QR images are hosted outside the repository:
 
-   - Name: `VITE_PAYMENT_QR_URL`
-   - Value: `https://your-cdn.example.com/payment-qr.png`
+   - Name: `VITE_WECHAT_PAYMENT_QR_URL`
+   - Value: `https://your-cdn.example.com/payment-wechat.jpg`
+   - Name: `VITE_ALIPAY_PAYMENT_QR_URL`
+   - Value: `https://your-cdn.example.com/payment-alipay.jpg`
 
-The workflow reads these values with `vars.VITE_API_BASE_URL` and
-`vars.VITE_PAYMENT_QR_URL`. `VITE_API_BASE_URL` must point at the deployed Worker
-and must not contain a trailing slash.
+The workflow reads these values with `vars.VITE_API_BASE_URL`,
+`vars.VITE_WECHAT_PAYMENT_QR_URL`, and `vars.VITE_ALIPAY_PAYMENT_QR_URL`.
+`VITE_API_BASE_URL` must point at the deployed Worker and must not contain a
+trailing slash.
 
-`VITE_PAYMENT_QR_URL` may stay empty. When it is empty, `PaymentClaimPage` falls
-back to a base-path-aware `payment-qr.svg` URL resolved from
-`import.meta.env.BASE_URL`, so the fallback still works when the site is published
-under a repository subpath.
+The two QR variables may stay empty. When they are empty, `PaymentClaimPage`
+falls back to the bundled `payment-wechat.jpg` and `payment-alipay.jpg` files
+under `import.meta.env.BASE_URL`, so the fallback works under a repository
+subpath.
 
 ### Custom domain migration
 

@@ -15,7 +15,8 @@ describe('deployment documentation', () => {
   it('documents every deployment token needed to configure production', () => {
     const requiredTokens = [
       'VITE_API_BASE_URL',
-      'VITE_PAYMENT_QR_URL',
+      'VITE_WECHAT_PAYMENT_QR_URL',
+      'VITE_ALIPAY_PAYMENT_QR_URL',
       'ADMIN_PASSWORD_HASH',
       'SUPER_COURSE_PASSWORD_HASH',
       'ANBU_COURSE_PASSWORD_HASH',
@@ -34,7 +35,8 @@ describe('deployment documentation', () => {
   it('explains how to set the GitHub Actions repository variables', () => {
     expect(deploymentDoc).toMatch(/Settings > Secrets and variables >\s+Actions/);
     expect(deploymentDoc).toContain('vars.VITE_API_BASE_URL');
-    expect(deploymentDoc).toContain('vars.VITE_PAYMENT_QR_URL');
+    expect(deploymentDoc).toContain('vars.VITE_WECHAT_PAYMENT_QR_URL');
+    expect(deploymentDoc).toContain('vars.VITE_ALIPAY_PAYMENT_QR_URL');
   });
 
   it('makes VITE_API_BASE_URL a fail-fast requirement in the Pages workflow', () => {
