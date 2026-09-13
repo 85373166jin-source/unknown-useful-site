@@ -7,6 +7,20 @@ D1 database, and Workers KV screenshot namespace are deployed separately with Wr
 Do not commit production secrets or payment screenshots. Keep secrets in the
 Cloudflare dashboard or in local `.dev.vars` files, both of which are git-ignored.
 
+## Release order
+
+Follow the Worker-before-Pages order. The comment surfaces in the Pages bundle call
+the comment API, so the Worker and its D1 schema must already be live before the
+new frontend is published:
+
+1. Back up the remote database with `npm run export:data`.
+2. Apply the pending remote migrations, including
+   `apps/api/migrations/0004_comments.sql` (comments) and
+   `apps/api/migrations/0005_free_product.sql` (the `free` product).
+3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
+4. Only then push the Pages build. Publishing Pages before the matching Worker
+   makes the new comment UI call endpoints that do not exist yet.
+
 ## GitHub Pages
 
 ### Repository settings
@@ -115,6 +129,13 @@ before deploying the Worker that reads `price_cents`,
 remain only for migration compatibility; all new reads, writes, reports, and API
 payloads use integer cents. The membership products are inserted by the guarded
 membership seed step after the first Worker deployment.
+
+The comments phase adds two more migrations. Apply
+`apps/api/migrations/0004_comments.sql`, which creates the `comments` table plus
+its product/status/created and `author_only` visibility indexes, and
+`apps/api/migrations/0005_free_product.sql`, which inserts the `free` product that
+backs the homepage free-resource comments. Apply both before deploying the Worker
+that serves the comment endpoints.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
@@ -232,6 +253,14 @@ above are in place.
    Worker is `apps/api/src/db/seed.ts`, is temporary, uses a one-time
    `SEED_TOKEN`, and is never mounted by `apps/api/src/index.ts` in the public
    main entry.
+
+### Hourly comment cleanup
+
+`apps/api/wrangler.toml` declares a cron trigger (`crons = ["0 * * * *"]`), so the
+Worker runs once an hour. The scheduled handler deletes `author_only` comments
+whose `visible_until` has passed and expired `rate_limits` rows. No manual step is
+required; after deploying, confirm the trigger is active under **Workers & Pages >
+Worker > Settings > Trigger events**.
 
 ## Rollback
 

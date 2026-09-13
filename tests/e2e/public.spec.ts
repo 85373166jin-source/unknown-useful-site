@@ -4,7 +4,7 @@ import { USER_PASSWORD, uniqueUsername } from './helpers';
 test('guests can browse the public home page', async ({ page }) => {
   await page.goto('/#/');
   await expect(page.getByRole('heading', { name: '某不知名有用的网站' })).toBeVisible();
-  await expect(page.getByRole('link', { name: '登录' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '登录', exact: true })).toBeVisible();
 });
 
 test('protected account page redirects guests to login', async ({ page }) => {

@@ -80,3 +80,40 @@ export async function setSession(page: Page, token: string): Promise<void> {
 export function uniqueUsername(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
+
+// The auth API rate-limits logins per username (5 per 15 minutes), so the owner
+// session is requested once per test worker and reused for the rest of the run.
+let cachedAdminToken: string | null = null;
+
+export async function getAdminToken(request: APIRequestContext): Promise<string> {
+  if (!cachedAdminToken) {
+    cachedAdminToken = (await loginUser(request, ADMIN_USERNAME, ADMIN_PASSWORD)).token;
+  }
+  return cachedAdminToken;
+}
+
+export async function approvePaymentClaim(
+  request: APIRequestContext,
+  orderNo: string,
+  actualAmountCents: number
+): Promise<void> {
+  const adminToken = await getAdminToken(request);
+  const review = await request.patch(`${API_URL}/api/v1/admin/orders/${orderNo}/review`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+    data: { decision: 'approve', actualAmountCents }
+  });
+  expect(review.status(), 'payment claim approval should succeed').toBe(200);
+}
+
+export async function createSvipUser(
+  request: APIRequestContext,
+  username: string
+): Promise<{ token: string; user: { id: string; username: string } }> {
+  const session = await registerUser(request, username);
+  const claim = await createPaymentClaim(request, session.token, {
+    productId: 'svip_monthly',
+    contactText: `e2e-svip-${Date.now()}-${Math.floor(Math.random() * 1000)}@example.com`
+  });
+  await approvePaymentClaim(request, claim.orderNo, 1990);
+  return session;
+}

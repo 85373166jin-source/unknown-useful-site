@@ -94,4 +94,38 @@ describe('deployment documentation', () => {
     expect(operationsDoc).toContain('apps/api/migrations/0001_init.sql');
     expect(operationsDoc).not.toMatch(/apply `apps\/api\/migrations\/0001_init\.sql` first and then import the exported SQL/);
   });
+
+  it('documents comment moderation and the SVIP fixed-window behavior', () => {
+    expect(operationsDoc).toContain('## Comment moderation');
+    expect(operationsDoc).toContain('## Comment cleanup (hourly cron)');
+    expect(operationsDoc).toMatch(/SVIP members are not moderated/);
+    expect(operationsDoc).toMatch(/fixed ten-minute window/);
+    expect(operationsDoc).toMatch(/author_only/);
+    expect(operationsDoc).toMatch(/created_at \+ 1 hour/);
+    expect(operationsDoc).toContain('comment.approved');
+    expect(operationsDoc).toContain('comment.rejected');
+    expect(operationsDoc).toContain('comment.deleted');
+  });
+
+  it('documents the hourly cron cleanup for author-only comments and rate limits', () => {
+    expect(operationsDoc).toMatch(/hourly cron trigger/i);
+    expect(operationsDoc).toMatch(/rate_limits/);
+    expect(deploymentDoc).toContain('crons = ["0 * * * *"]');
+    expect(deploymentDoc).toContain('### Hourly comment cleanup');
+  });
+
+  it('documents the comments migrations and the Worker-before-Pages release order', () => {
+    expect(deploymentDoc).toContain('0004_comments.sql');
+    expect(deploymentDoc).toContain('0005_free_product.sql');
+    expect(operationsDoc).toContain('0004_comments.sql');
+    expect(operationsDoc).toContain('0005_free_product.sql');
+
+    const releaseOrder = deploymentDoc.indexOf('## Release order');
+    const pages = deploymentDoc.indexOf('## GitHub Pages');
+    expect(releaseOrder).toBeGreaterThan(-1);
+    expect(pages).toBeGreaterThan(-1);
+    expect(releaseOrder).toBeLessThan(pages);
+    expect(deploymentDoc).toContain('Worker-before-Pages');
+    expect(deploymentDoc).toContain('npm run deploy:api');
+  });
 });

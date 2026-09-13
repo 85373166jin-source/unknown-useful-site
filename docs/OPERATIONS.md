@@ -70,6 +70,54 @@ Membership products are non-discountable, so a 990-cent VIP product remains
 `9.90` yuan for VIP and SVIP users. Course discounts still use integer cents:
 a 2900-cent course is `23.20` yuan for VIP and `14.50` yuan for SVIP.
 
+## Comment moderation
+
+Product comments are plain text (1 to 1000 characters) bound to a `product_id`,
+and appear on the course pages (`super`, `anbu`, `bundle`), the membership page
+(`vip_monthly`, `svip_monthly`), and the homepage free-resource area (`free`).
+The comment table comes from `apps/api/migrations/0004_comments.sql`; the `free`
+product it can host comments for comes from
+`apps/api/migrations/0005_free_product.sql`.
+
+1. Open `/admin/#/comments` (visible to the owner and to comment moderators).
+2. Filter by 待审核 / 已发布 / 限时评论, which map to the `pending`, `public`,
+   and `author_only` statuses.
+3. For a pending comment choose 通过 to publish it, or 拒绝 and enter a
+   拒绝原因.
+4. Use 删除 to remove any comment. Published comments can only be deleted; there
+   is no hide or restore action.
+
+Ordinary and VIP comments are created as `pending` and stay invisible to other
+visitors until a moderator approves them. The author always sees their own
+`pending` and `rejected` comments on the product page, marked 审核中 or
+审核未通过 with the rejection reason; guests and other users see only `public`
+comments. Approve, reject, and delete each write an audit entry
+(`comment.approved`, `comment.rejected`, `comment.deleted`) that can be reviewed
+in `/admin/#/audit`.
+
+### SVIP fixed-window comments
+
+SVIP members are not moderated. The first three comments an SVIP submits inside a
+fixed ten-minute window publish immediately as `public`. The fourth and any later
+comment in the same window are stored as `author_only`: they show to the author as
+ordinary comments, stay hidden from everyone else without any hidden/spam/failed
+wording, and never enter the manual moderation queue.
+
+The quota is a fixed window, not a sliding one, so the window rolls over at the
+next ten-minute boundary. A burst that straddles a boundary can briefly produce
+more than three public comments across the two windows; this is expected.
+`author_only` comments carry `visible_until = created_at + 1 hour` and are removed
+after that hour.
+
+## Comment cleanup (hourly cron)
+
+`apps/api/wrangler.toml` registers an hourly cron trigger (`crons =
+["0 * * * *"]`). On each run the Worker deletes every expired `author_only`
+comment (`visible_until <= now`) and every expired `rate_limits` row, so the
+author-only comment and the SVIP quota both clear on schedule. There is no manual
+cleanup step; if cleanup looks stalled, check the Worker's cron trigger and recent
+invocations in the Cloudflare dashboard.
+
 ## 修改站长和课程凭据
 
 Open `/admin/#/settings` to change any of the following without editing the database:
