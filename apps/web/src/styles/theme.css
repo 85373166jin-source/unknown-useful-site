@@ -249,3 +249,6 @@
 .payment-claim-qr__image { width:100%; max-width:260px; border-radius:12px; background:#fff; padding:6px; box-shadow:var(--shadow-card); }
 .payment-claim-qr__hint { margin-top:16px; }
 @media (max-width:760px) { .payment-claim-qr__grid { grid-template-columns:1fr; } }
+
+.account-admin-entry p { margin-bottom: 16px; }
+.account-admin-entry .button { margin-top: 4px; }

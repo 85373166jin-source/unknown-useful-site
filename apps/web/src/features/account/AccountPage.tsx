@@ -123,7 +123,7 @@ export function AccountPage() {
         </dl>
       </div>
       {user.role === 'admin' ? (
-        <div className="card">
+        <div className="card account-admin-entry">
           <h2>站长后台</h2>
           <p>当前账号具有管理员权限，可以进入订单审核、用户管理和收入统计页面。</p>
           <a className="button button--primary" href={import.meta.env.BASE_URL + 'admin/#/dashboard'}>
