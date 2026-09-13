@@ -7,6 +7,7 @@ import { listActiveEntitlementsForUser } from '../repositories/learning';
 import {
   buildUpdateUserPasswordStatement,
   findUserById,
+  findUserByUsername,
   insertAdminEntitlement,
   listAllUsersForAdmin,
   listLatestLoginEvents,
@@ -74,6 +75,17 @@ const userMutationSchema = z
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(128)
 });
+
+const adminSecuritySchema = z
+  .object({
+    username: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
+    newPassword: z.string().min(8).max(128).optional(),
+    superCoursePassword: z.string().min(8).max(128).optional(),
+    anbuCoursePassword: z.string().min(8).max(128).optional()
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'Specify at least one security setting'
+  });
 
 const contactKindSchema = z.enum(['phone', 'email']);
 
@@ -375,6 +387,97 @@ adminRoutes.get('/risk', bearerAuth, requireAdmin, async (c) => {
 
 adminRoutes.get('/audit', bearerAuth, requireAdmin, async (c) => {
   return c.json({ audits: await listAuditHistory(c.env) });
+});
+
+adminRoutes.patch('/security', bearerAuth, requireAdmin, async (c) => {
+  const parsed = adminSecuritySchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    throw new ApiError('invalid_request', 'Request validation failed', 400);
+  }
+
+  const current = await findUserById(c.env.DB, c.get('userId'));
+  if (!current) {
+    throw new ApiError('unauthorized', 'Account is not available', 401);
+  }
+
+  const input = parsed.data;
+  const now = Date.now();
+  const statements: D1PreparedStatement[] = [];
+  const usernameChanged = input.username !== undefined && input.username !== current.username;
+  const passwordChanged = input.newPassword !== undefined;
+  const before = {
+    username: current.username,
+    passwordChanged: false,
+    superCoursePasswordChanged: false,
+    anbuCoursePasswordChanged: false
+  };
+
+  if (input.username !== undefined && usernameChanged) {
+    const owner = await findUserByUsername(c.env.DB, input.username);
+    if (owner && owner.id !== current.id) {
+      throw new ApiError('duplicate_username', 'Username is already in use', 409);
+    }
+    statements.push(
+      c.env.DB.prepare('UPDATE users SET username = ?, updated_at = ? WHERE id = ?').bind(
+        input.username,
+        now,
+        current.id
+      )
+    );
+  }
+
+  if (input.newPassword !== undefined) {
+    statements.push(buildUpdateUserPasswordStatement(c.env.DB, current.id, await hashPassword(input.newPassword), now));
+    statements.push(buildDeleteAllSessionsStatement(c.env.DB, current.id));
+  }
+
+  if (input.superCoursePassword !== undefined) {
+    statements.push(
+      c.env.DB.prepare('UPDATE series SET course_password_hash = ?, updated_at = ? WHERE id = ?').bind(
+        await hashPassword(input.superCoursePassword),
+        now,
+        'super'
+      )
+    );
+  }
+
+  if (input.anbuCoursePassword !== undefined) {
+    statements.push(
+      c.env.DB.prepare('UPDATE series SET course_password_hash = ?, updated_at = ? WHERE id = ?').bind(
+        await hashPassword(input.anbuCoursePassword),
+        now,
+        'anbu'
+      )
+    );
+  }
+
+  if (statements.length > 0) {
+    try {
+      await c.env.DB.batch(statements);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('UNIQUE') && message.includes('users.username')) {
+        throw new ApiError('duplicate_username', 'Username is already in use', 409);
+      }
+      throw error;
+    }
+  }
+
+  await recordAudit(c.env, {
+    actorUserId: current.id,
+    action: 'admin.security.update',
+    entityType: 'admin_security',
+    entityId: current.id,
+    before,
+    after: {
+      username: input.username ?? current.username,
+      passwordChanged,
+      superCoursePasswordChanged: input.superCoursePassword !== undefined,
+      anbuCoursePasswordChanged: input.anbuCoursePassword !== undefined
+    }
+  });
+
+  return c.json({ ok: true, requireLogin: usernameChanged || passwordChanged });
 });
 
 adminRoutes.patch('/users/:id', bearerAuth, requireAdmin, async (c) => {

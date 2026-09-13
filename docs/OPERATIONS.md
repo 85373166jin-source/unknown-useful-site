@@ -43,6 +43,20 @@ reports keep using the server-controlled `reviewed_at` confirmation time, so a
 corrected payment time does not move confirmed revenue into a different day or
 month. Verify the change appears in `/admin/#/revenue` and `/admin/#/audit`.
 
+## 修改站长和课程凭据
+
+Open `/admin/#/settings` to change any of the following without editing the database:
+
+- 站长用户名
+- 站长登录密码
+- 超影课程密码
+- 暗影课程密码
+
+Blank fields are unchanged. Changing the admin username or password invalidates all
+old sessions and returns to the login screen. Changing either course password
+invalidates nothing for existing owners, but future course-password unlocks must
+use the new value. Confirm the change in `/admin/#/audit`.
+
 ## Password reset
 
 1. Open `/admin/#/users`.

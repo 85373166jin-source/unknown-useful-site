@@ -1,9 +1,10 @@
-import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
 import { AdminDashboard } from '../features/admin/AdminDashboard';
 import { AdminOrders } from '../features/admin/AdminOrders';
 import { AdminRevenue } from '../features/admin/AdminRevenue';
+import { AdminSettings } from '../features/admin/AdminSettings';
 import { AdminUsers } from '../features/admin/AdminUsers';
 
 const ADMIN_NAV_ITEMS = [
@@ -11,7 +12,8 @@ const ADMIN_NAV_ITEMS = [
   { to: '/orders', label: '订单审核' },
   { to: '/users', label: '用户管理' },
   { to: '/revenue', label: '收入统计' },
-  { to: '/audit', label: '审计记录' }
+  { to: '/audit', label: '审计记录' },
+  { to: '/settings', label: '安全设置' }
 ];
 
 function AdminLayout() {
@@ -50,9 +52,12 @@ function AdminForbidden() {
 }
 
 function AdminLoginNotice() {
+  const location = useLocation();
+  const notice = (location.state as { notice?: string } | null)?.notice;
   return (
     <section className="admin-forbidden">
       <h1>请先登录</h1>
+      {notice ? <div className="alert alert--success" role="status">{notice}</div> : null}
       <p>请先在主站登录管理员账号，再访问站长后台。</p>
     </section>
   );
@@ -79,6 +84,7 @@ export function AdminApp() {
         <Route path="/users" element={<AdminUsers />} />
         <Route path="/revenue" element={<AdminRevenue />} />
         <Route path="/audit" element={<AdminAudit />} />
+        <Route path="/settings" element={<AdminSettings />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

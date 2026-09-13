@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import app from '../src/index';
-import { hashPassword } from '../src/services/password';
+import { hashPassword, verifyPassword } from '../src/services/password';
 import { resetTestDatabase } from './helpers/test-db';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -629,6 +629,63 @@ describe('admin reporting and user management API', () => {
     expect(auditBody.audits.some((entry) => entry.action === 'auth.login')).toBe(true);
     expect(JSON.stringify(auditBody)).not.toContain('alice@example.com');
   });
+  it('updates admin credentials and course passwords without overwriting them on reseed', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const now = Date.now();
+    const oldSuperHash = await hashPassword('old-super-password');
+    const oldAnbuHash = await hashPassword('old-anbu-password');
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('super', '超影课程', 'active', ?, ?, ?)`
+      ).bind(oldSuperHash, now, now),
+      env.DB.prepare(
+        `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'coming_soon', ?, ?, ?)`
+      ).bind(oldAnbuHash, now, now)
+    ]);
+
+    const response = await app.request('/api/v1/admin/security', {
+      method: 'PATCH',
+      headers: jsonAuthHeaders(adminToken),
+      body: JSON.stringify({
+        username: 'owner-1',
+        newPassword: 'new-admin-password-123',
+        superCoursePassword: 'new-super-password-123',
+        anbuCoursePassword: 'new-anbu-password-123'
+      })
+    }, env);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true, requireLogin: true });
+
+    await expectError(await app.request('/api/v1/auth/me', { headers: authHeaders(adminToken) }, env), 401, 'unauthorized');
+    const oldLogin = await app.request('/api/v1/auth/login', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ username: 'admin-1', password: 'admin-password-123' })
+    }, env);
+    expect(oldLogin.status).toBe(401);
+    const newLogin = await app.request('/api/v1/auth/login', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ username: 'owner-1', password: 'new-admin-password-123' })
+    }, env);
+    expect(newLogin.status).toBe(200);
+
+    const seriesRows = await env.DB.prepare(
+      `SELECT id, course_password_hash FROM series WHERE id IN ('super', 'anbu') ORDER BY id`
+    ).all<{ id: string; course_password_hash: string }>();
+    const superRow = seriesRows.results?.find((row) => row.id === 'super');
+    const anbuRow = seriesRows.results?.find((row) => row.id === 'anbu');
+    expect(superRow && await verifyPassword('new-super-password-123', superRow.course_password_hash)).toBe(true);
+    expect(anbuRow && await verifyPassword('new-anbu-password-123', anbuRow.course_password_hash)).toBe(true);
+
+    const auditRows = await env.DB.prepare(
+      `SELECT before_json, after_json FROM audit_logs WHERE action = 'admin.security.update'`
+    ).all<{ before_json: string; after_json: string }>();
+    expect(auditRows.results?.length).toBe(1);
+    expect(JSON.stringify(auditRows.results)).not.toContain('new-admin-password-123');
+    expect(JSON.stringify(auditRows.results)).not.toContain('new-super-password-123');
+  });
+
   it('shows the real latest login even when it is outside the risk window', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { userId } = await registerUser('alice');

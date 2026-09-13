@@ -53,7 +53,6 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
        ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         status = excluded.status,
-        course_password_hash = excluded.course_password_hash,
         updated_at = excluded.updated_at`
     )
       .bind(series.id, series.title, series.status, passwordHash, now, now)
@@ -93,8 +92,6 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
     `INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at)
      VALUES ('admin', ?, ?, 'admin', 'active', ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-      username = excluded.username,
-      password_hash = excluded.password_hash,
       role = excluded.role,
       status = excluded.status,
       updated_at = excluded.updated_at`
