@@ -13,6 +13,9 @@ type Claim = {
   productId: string;
   listAmountYuan: number;
   actualAmountYuan: number | null;
+  paidAt: number;
+  adminNote: string | null;
+  reviewedAt: number | null;
   status: 'pending' | 'approved' | 'rejected';
 };
 
@@ -234,25 +237,37 @@ describe('admin reporting and user management API', () => {
     expect(report.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(report.totalYuan);
   });
 
-  it('excludes claims older than the selected revenue range', async () => {
+  it('buckets revenue by the server reviewed_at time instead of user-paid time', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');
     const oldPaidAt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
     const claim = await (await createClaim(token, claimForm({ paidAt: oldPaidAt }))).json<Claim>();
     await reviewClaim(adminToken, claim.orderNo, { decision: 'approve' });
 
+    // Approval happened now, so the recent window still contains the claim even
+    // though the user reported a much older paid_at value.
     const recent = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
     expect(recent.status).toBe(200);
     const recentBody = await recent.json<Revenue>();
-    expect(recentBody.totalYuan).toBe(0);
-    expect(recentBody.byProduct.bundle).toBe(0);
-    expect(recentBody.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(0);
+    expect(recentBody.totalYuan).toBe(49);
+    expect(recentBody.byProduct.bundle).toBe(49);
+
+    // Moving the server confirmation time outside the window moves the revenue.
+    const oldReviewedAt = Date.now() - 45 * 24 * 60 * 60 * 1000;
+    await env.DB.prepare('UPDATE payment_claims SET reviewed_at = ? WHERE order_no = ?')
+      .bind(oldReviewedAt, claim.orderNo)
+      .run();
+
+    const shifted = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
+    expect(shifted.status).toBe(200);
+    const shiftedBody = await shifted.json<Revenue>();
+    expect(shiftedBody.totalYuan).toBe(0);
+    expect(shiftedBody.byProduct.bundle).toBe(0);
 
     const allTime = await app.request('/api/v1/admin/revenue?range=all', { headers: authHeaders(adminToken) }, env);
     expect(allTime.status).toBe(200);
     const allTimeBody = await allTime.json<Revenue>();
     expect(allTimeBody.range).toBe('all');
-    expect(allTimeBody.seriesDays).toBe(30);
     expect(allTimeBody.totalYuan).toBe(49);
     expect(allTimeBody.byProduct.bundle).toBe(49);
   });
@@ -304,6 +319,80 @@ describe('admin reporting and user management API', () => {
     expect(dashboardBody.byProduct.bundle).toBe(60);
   });
 
+  it('corrects an approved order amount, paid time, and note with an audited before/after', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const { token } = await registerUser('alice');
+    const claim = await (await createClaim(token)).json<Claim>();
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountYuan: 49, note: '首款' });
+
+    const correctedPaidAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const correction = await reviewClaim(adminToken, claim.orderNo, {
+      decision: 'correct',
+      actualAmountYuan: 60,
+      paidAt: correctedPaidAt,
+      note: '客户补款'
+    });
+    expect(correction.status).toBe(200);
+    const corrected = await correction.json<Claim>();
+    expect(corrected.actualAmountYuan).toBe(60);
+    expect(corrected.paidAt).toBe(Date.parse(correctedPaidAt));
+    expect(corrected.adminNote).toBe('客户补款');
+
+    const dbClaim = await env.DB.prepare(
+      `SELECT actual_amount_yuan, paid_at, admin_note FROM payment_claims WHERE order_no = ?`
+    ).bind(claim.orderNo).first<{ actual_amount_yuan: number; paid_at: number; admin_note: string | null }>();
+    expect(dbClaim?.actual_amount_yuan).toBe(60);
+    expect(dbClaim?.paid_at).toBe(Date.parse(correctedPaidAt));
+    expect(dbClaim?.admin_note).toBe('客户补款');
+
+    const audits = await env.DB.prepare(
+      `SELECT before_json, after_json FROM audit_logs WHERE action = 'order.corrected' AND entity_id = ?`
+    ).bind(claim.orderNo).all<{ before_json: string; after_json: string }>();
+    expect(audits.results?.length).toBe(1);
+    const audit = audits.results?.[0];
+    expect(audit?.before_json).toContain('"actualAmountYuan":49');
+    expect(audit?.before_json).toContain('"adminNote":"首款"');
+    expect(audit?.after_json).toContain('"actualAmountYuan":60');
+    expect(audit?.after_json).toContain('"adminNote":"客户补款"');
+  });
+
+  it('keeps corrected revenue in the server confirmation day, not the corrected paid time', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const { token } = await registerUser('alice');
+    const claim = await (await createClaim(token)).json<Claim>();
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountYuan: 49 });
+
+    const oldPaidAt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    const correction = await reviewClaim(adminToken, claim.orderNo, {
+      decision: 'correct',
+      actualAmountYuan: 60,
+      paidAt: oldPaidAt
+    });
+    expect(correction.status).toBe(200);
+
+    const dashboard = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
+    const dashboardBody = await dashboard.json<Dashboard>();
+    expect(dashboardBody.confirmedRevenueYuan).toBe(60);
+    expect(dashboardBody.monthRevenueYuan).toBe(60);
+    expect(dashboardBody.todayRevenueYuan).toBe(60);
+  });
+
+  it('only allows corrections on approved orders', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const { token } = await registerUser('alice');
+    const pending = await (await createClaim(token)).json<Claim>();
+
+    const pendingCorrection = await reviewClaim(adminToken, pending.orderNo, {
+      decision: 'correct',
+      actualAmountYuan: 60
+    });
+    await expectError(pendingCorrection, 409, 'invalid_state');
+
+    await reviewClaim(adminToken, pending.orderNo, { decision: 'approve', actualAmountYuan: 49 });
+    const emptyCorrection = await reviewClaim(adminToken, pending.orderNo, { decision: 'correct' });
+    await expectError(emptyCorrection, 400, 'invalid_request');
+  });
+
   it('forbids normal users from every admin endpoint', async () => {
     await seedCatalogAndAdmin();
     const { token, userId } = await registerUser('alice');
@@ -325,6 +414,16 @@ describe('admin reporting and user management API', () => {
         method: 'PATCH',
         headers: jsonAuthHeaders(token),
         body: JSON.stringify({ status: 'disabled' })
+      }, env),
+      403,
+      'forbidden'
+    );
+
+    await expectError(
+      await app.request('/api/v1/admin/orders/any/review', {
+        method: 'PATCH',
+        headers: jsonAuthHeaders(token),
+        body: JSON.stringify({ decision: 'correct', actualAmountYuan: 60 })
       }, env),
       403,
       'forbidden'

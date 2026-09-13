@@ -22,6 +22,7 @@ export interface PaymentClaimRow {
   screenshot_key: string;
   status: PaymentClaimStatus;
   rejection_reason: string | null;
+  admin_note: string | null;
   reviewed_by: string | null;
   reviewed_at: number | null;
   created_at: number;
@@ -45,8 +46,16 @@ export interface UpdatePaymentClaimReviewInput {
   status: 'approved' | 'rejected';
   actualAmountYuan: number | null;
   rejectionReason: string | null;
+  note: string | null;
   reviewedBy: string;
   reviewedAt: number;
+  updatedAt: number;
+}
+
+export interface UpdatePaymentClaimCorrectionInput {
+  actualAmountYuan: number;
+  paidAt: number;
+  note: string | null;
   updatedAt: number;
 }
 
@@ -58,7 +67,7 @@ export interface InsertOrderEntitlementInput {
 }
 
 const PAYMENT_CLAIM_COLUMNS =
-  'id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, paid_at, contact_text, screenshot_key, status, rejection_reason, reviewed_by, reviewed_at, created_at, updated_at';
+  'id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, paid_at, contact_text, screenshot_key, status, rejection_reason, admin_note, reviewed_by, reviewed_at, created_at, updated_at';
 
 export async function findProductById(db: D1Database, productId: string): Promise<ProductRow | null> {
   return db
@@ -169,6 +178,7 @@ export async function updatePaymentClaimReview(
        SET actual_amount_yuan = ?,
            status = ?,
            rejection_reason = ?,
+           admin_note = ?,
            reviewed_by = ?,
            reviewed_at = ?,
            updated_at = ?
@@ -178,6 +188,7 @@ export async function updatePaymentClaimReview(
       input.actualAmountYuan,
       input.status,
       input.rejectionReason,
+      input.note,
       input.reviewedBy,
       input.reviewedAt,
       input.updatedAt,
@@ -188,6 +199,30 @@ export async function updatePaymentClaimReview(
   const updated = await findPaymentClaimByOrderNo(db, orderNo);
   if (!updated) {
     throw new Error('Failed to load the updated payment claim');
+  }
+  return updated;
+}
+
+export async function updatePaymentClaimCorrection(
+  db: D1Database,
+  orderNo: string,
+  input: UpdatePaymentClaimCorrectionInput
+): Promise<PaymentClaimRow> {
+  await db
+    .prepare(
+      `UPDATE payment_claims
+       SET actual_amount_yuan = ?,
+           paid_at = ?,
+           admin_note = ?,
+           updated_at = ?
+       WHERE order_no = ?`
+    )
+    .bind(input.actualAmountYuan, input.paidAt, input.note, input.updatedAt, orderNo)
+    .run();
+
+  const updated = await findPaymentClaimByOrderNo(db, orderNo);
+  if (!updated) {
+    throw new Error('Failed to load the corrected payment claim');
   }
   return updated;
 }
@@ -214,8 +249,7 @@ export interface ApprovedPaymentClaimRow {
   list_amount_yuan: number;
   actual_amount_yuan: number | null;
   confirmed_amount_yuan: number;
-  paid_at: number;
-  reviewed_at: number | null;
+  confirmed_at: number;
   category_id: string;
 }
 
@@ -231,11 +265,12 @@ export async function listApprovedPaymentClaims(
     .prepare(
       `SELECT pc.id, pc.user_id, pc.product_id, pc.list_amount_yuan, pc.actual_amount_yuan,
               COALESCE(pc.actual_amount_yuan, pc.list_amount_yuan) AS confirmed_amount_yuan,
-              pc.paid_at, pc.reviewed_at, p.category_id
+              COALESCE(pc.reviewed_at, pc.created_at) AS confirmed_at,
+              p.category_id
        FROM payment_claims pc
        JOIN products p ON p.id = pc.product_id
        WHERE pc.status = 'approved'
-       ORDER BY pc.paid_at`
+       ORDER BY confirmed_at`
     )
     .all<ApprovedPaymentClaimRow>();
   return result.results ?? [];

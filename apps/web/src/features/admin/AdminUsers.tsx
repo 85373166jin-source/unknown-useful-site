@@ -157,6 +157,38 @@ export function AdminUsers() {
     }
   }
 
+  async function handleGrantRevoke(
+    user: AdminUser,
+    productId: 'super' | 'anbu',
+    action: 'grant' | 'revoke'
+  ): Promise<void> {
+    const productTitle = entitlementTitle(productId);
+    const confirmed = window.confirm(
+      action === 'grant'
+        ? `确定开通 ${user.username} 的${productTitle}吗？`
+        : `确定撤销 ${user.username} 的${productTitle}吗？`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      await apiFetch(`/admin/users/${user.id}`, {
+        method: 'PATCH',
+        body: action === 'grant' ? { grantProductId: productId } : { revokeProductId: productId }
+      });
+      setNotice(action === 'grant' ? `${productTitle}已开通` : `${productTitle}已撤销`);
+      await loadUsers();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '更新权益失败，请稍后重试');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="admin-page">
       <header className="admin-page__header">
@@ -299,6 +331,44 @@ export function AdminUsers() {
                       >
                         {user.status === 'active' ? '禁用' : '恢复'}
                       </button>
+                      {user.entitlements.includes('super') ? (
+                        <button
+                          type="button"
+                          className="button"
+                          disabled={busy}
+                          onClick={() => void handleGrantRevoke(user, 'super', 'revoke')}
+                        >
+                          撤销超影
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button"
+                          disabled={busy}
+                          onClick={() => void handleGrantRevoke(user, 'super', 'grant')}
+                        >
+                          开通超影
+                        </button>
+                      )}
+                      {user.entitlements.includes('anbu') ? (
+                        <button
+                          type="button"
+                          className="button"
+                          disabled={busy}
+                          onClick={() => void handleGrantRevoke(user, 'anbu', 'revoke')}
+                        >
+                          撤销暗部
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button"
+                          disabled={busy}
+                          onClick={() => void handleGrantRevoke(user, 'anbu', 'grant')}
+                        >
+                          开通暗部
+                        </button>
+                      )}
                       {user.phoneMask ? (
                         <button
                           type="button"

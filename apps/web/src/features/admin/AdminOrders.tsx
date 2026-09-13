@@ -15,6 +15,7 @@ interface AdminOrder {
   contactText: string;
   status: OrderStatus;
   rejectionReason: string | null;
+  adminNote: string | null;
   reviewedBy: string | null;
   reviewedAt: number | null;
   createdAt: number;
@@ -46,6 +47,14 @@ function productTitle(productId: ProductId): string {
   return CATALOG.products[productId]?.title ?? productId;
 }
 
+function toDateTimeLocalValue(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 async function loadScreenshot(orderNo: string): Promise<string> {
   const token = getSessionToken();
   const headers = new Headers();
@@ -73,6 +82,8 @@ export function AdminOrders() {
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [actualAmount, setActualAmount] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [note, setNote] = useState('');
+  const [paidAt, setPaidAt] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function loadOrders(): Promise<void> {
@@ -123,6 +134,13 @@ export function AdminOrders() {
 
   const selectedOrder = orders.find((order) => order.orderNo === selectedOrderNo) ?? null;
 
+  function clearReviewForm(): void {
+    setActualAmount('');
+    setRejectionReason('');
+    setNote('');
+    setPaidAt('');
+  }
+
   async function handleReview(event: FormEvent<HTMLFormElement>, decision: 'approve' | 'reject'): Promise<void> {
     event.preventDefault();
     if (!selectedOrder) {
@@ -140,22 +158,68 @@ export function AdminOrders() {
       return;
     }
 
+    const body: Record<string, unknown> = { decision };
+    if (decision === 'approve') {
+      body.actualAmountYuan = amount;
+    } else {
+      body.rejectionReason = rejectionReason.trim();
+    }
+    const trimmedNote = note.trim();
+    if (trimmedNote) {
+      body.note = trimmedNote;
+    }
+
     setError(null);
     setBusy(true);
     try {
       await apiFetch(`/admin/orders/${selectedOrder.orderNo}/review`, {
         method: 'PATCH',
-        body:
-          decision === 'approve'
-            ? { decision, actualAmountYuan: amount }
-            : { decision, rejectionReason: rejectionReason.trim() }
+        body
       });
       setSelectedOrderNo(null);
-      setActualAmount('');
-      setRejectionReason('');
+      clearReviewForm();
       await loadOrders();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '审核失败，请稍后重试');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCorrect(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedOrder) {
+      return;
+    }
+
+    const amount = Number(actualAmount);
+    if (!Number.isInteger(amount) || amount < 0) {
+      setError('实收金额必须是非负整数');
+      return;
+    }
+
+    if (!paidAt || !Number.isFinite(Date.parse(paidAt))) {
+      setError('付款时间必须是有效日期');
+      return;
+    }
+
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch(`/admin/orders/${selectedOrder.orderNo}/review`, {
+        method: 'PATCH',
+        body: {
+          decision: 'correct',
+          actualAmountYuan: amount,
+          paidAt: new Date(paidAt).toISOString(),
+          note: note.trim()
+        }
+      });
+      setSelectedOrderNo(null);
+      clearReviewForm();
+      await loadOrders();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '修改订单失败，请稍后重试');
     } finally {
       setBusy(false);
     }
@@ -165,6 +229,8 @@ export function AdminOrders() {
     setSelectedOrderNo(order.orderNo);
     setActualAmount(String(order.actualAmountYuan ?? order.listAmountYuan));
     setRejectionReason('');
+    setNote(order.adminNote ?? '');
+    setPaidAt(toDateTimeLocalValue(order.paidAt));
     setError(null);
   }
 
@@ -252,6 +318,12 @@ export function AdminOrders() {
                 <dd>{selectedOrder.rejectionReason}</dd>
               </div>
             ) : null}
+            {selectedOrder.adminNote ? (
+              <div>
+                <dt>备注</dt>
+                <dd>{selectedOrder.adminNote}</dd>
+              </div>
+            ) : null}
           </dl>
 
           <div className="admin-screenshot">
@@ -281,6 +353,15 @@ export function AdminOrders() {
                     required
                   />
                 </div>
+                <div className="field">
+                  <label htmlFor="admin-approve-note">备注</label>
+                  <textarea
+                    id="admin-approve-note"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    rows={2}
+                  />
+                </div>
                 <button type="submit" className="button button--primary" disabled={busy}>
                   通过并确认收入
                 </button>
@@ -297,8 +378,59 @@ export function AdminOrders() {
                     required
                   />
                 </div>
+                <div className="field">
+                  <label htmlFor="admin-reject-note">备注</label>
+                  <textarea
+                    id="admin-reject-note"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    rows={2}
+                  />
+                </div>
                 <button type="submit" className="button" disabled={busy}>
                   拒绝订单
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {selectedOrder.status === 'approved' ? (
+            <div className="admin-review-actions">
+              <form className="admin-review-form" onSubmit={(event) => void handleCorrect(event)}>
+                <h3>修改已通过订单</h3>
+                <div className="field">
+                  <label htmlFor="admin-correct-amount">实收金额（元）</label>
+                  <input
+                    id="admin-correct-amount"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={actualAmount}
+                    onChange={(event) => setActualAmount(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="admin-correct-paid-at">付款时间</label>
+                  <input
+                    id="admin-correct-paid-at"
+                    type="datetime-local"
+                    value={paidAt}
+                    onChange={(event) => setPaidAt(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="admin-correct-note">备注</label>
+                  <textarea
+                    id="admin-correct-note"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    rows={2}
+                  />
+                </div>
+                <button type="submit" className="button button--primary" disabled={busy}>
+                  保存修改
                 </button>
               </form>
             </div>

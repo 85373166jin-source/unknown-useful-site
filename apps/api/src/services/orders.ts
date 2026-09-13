@@ -11,6 +11,7 @@ import {
   listAllPaymentClaims,
   listPaymentClaimsForUser,
   listProductComponentIds,
+  updatePaymentClaimCorrection,
   updatePaymentClaimReview,
   type PaymentClaimRow
 } from '../repositories/orders';
@@ -33,8 +34,10 @@ export interface CreatePaymentClaimInput {
 }
 
 export interface ReviewPaymentClaimInput {
-  decision: 'approve' | 'reject';
+  decision: 'approve' | 'reject' | 'correct';
   actualAmountYuan?: number | undefined;
+  paidAt?: string | undefined;
+  note?: string | undefined;
   rejectionReason?: string | undefined;
 }
 
@@ -49,6 +52,7 @@ export interface PaymentClaimPayload {
   contactText: string;
   status: PaymentClaimRow['status'];
   rejectionReason: string | null;
+  adminNote: string | null;
   reviewedBy: string | null;
   reviewedAt: number | null;
   createdAt: number;
@@ -102,6 +106,7 @@ export function toPaymentClaimPayload(row: PaymentClaimRow): PaymentClaimPayload
     contactText: row.contact_text,
     status: row.status,
     rejectionReason: row.rejection_reason,
+    adminNote: row.admin_note,
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
@@ -117,6 +122,7 @@ interface PaymentClaimAudit {
   paidAt: number;
   status: PaymentClaimRow['status'];
   rejectionReason: string | null;
+  adminNote: string | null;
   reviewedBy: string | null;
   reviewedAt: number | null;
   createdAt: number;
@@ -132,6 +138,7 @@ function toPaymentClaimAudit(row: PaymentClaimRow): PaymentClaimAudit {
     paidAt: row.paid_at,
     status: row.status,
     rejectionReason: row.rejection_reason,
+    adminNote: row.admin_note,
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
@@ -253,13 +260,15 @@ async function approvePaymentClaim(
   env: Env,
   reviewerUserId: string,
   claim: PaymentClaimRow,
-  actualAmountYuan: number
+  actualAmountYuan: number,
+  note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
   const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
     status: 'approved',
     actualAmountYuan,
     rejectionReason: null,
+    note,
     reviewedBy: reviewerUserId,
     reviewedAt: now,
     updatedAt: now
@@ -291,13 +300,15 @@ async function rejectPaymentClaim(
   env: Env,
   reviewerUserId: string,
   claim: PaymentClaimRow,
-  rejectionReason: string
+  rejectionReason: string,
+  note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
   const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
     status: 'rejected',
     actualAmountYuan: null,
     rejectionReason,
+    note,
     reviewedBy: reviewerUserId,
     reviewedAt: now,
     updatedAt: now
@@ -306,6 +317,43 @@ async function rejectPaymentClaim(
   await recordAudit(env, {
     actorUserId: reviewerUserId,
     action: 'order.rejected',
+    entityType: 'payment_claim',
+    entityId: claim.order_no,
+    before: toPaymentClaimAudit(claim),
+    after: toPaymentClaimAudit(updated)
+  });
+
+  return updated;
+}
+
+async function correctPaymentClaim(
+  env: Env,
+  reviewerUserId: string,
+  claim: PaymentClaimRow,
+  input: ReviewPaymentClaimInput
+): Promise<PaymentClaimRow> {
+  let paidAt = claim.paid_at;
+  if (input.paidAt !== undefined) {
+    const parsedPaidAt = Date.parse(input.paidAt);
+    if (!Number.isFinite(parsedPaidAt)) {
+      throw new ApiError('invalid_paid_at', 'Paid time must be a valid date', 400);
+    }
+    paidAt = parsedPaidAt;
+  }
+
+  const actualAmountYuan = input.actualAmountYuan ?? claim.actual_amount_yuan ?? claim.list_amount_yuan;
+  const note = input.note === undefined ? claim.admin_note : input.note.trim() || null;
+  const now = Date.now();
+  const updated = await updatePaymentClaimCorrection(env.DB, claim.order_no, {
+    actualAmountYuan,
+    paidAt,
+    note,
+    updatedAt: now
+  });
+
+  await recordAudit(env, {
+    actorUserId: reviewerUserId,
+    action: 'order.corrected',
     entityType: 'payment_claim',
     entityId: claim.order_no,
     before: toPaymentClaimAudit(claim),
@@ -326,6 +374,13 @@ export async function reviewPaymentClaim(
     throw new ApiError('order_not_found', 'Payment claim not found', 404);
   }
 
+  if (input.decision === 'correct') {
+    if (claim.status !== 'approved') {
+      throw new ApiError('invalid_state', 'Only approved payment claims can be corrected', 409);
+    }
+    return correctPaymentClaim(env, reviewerUserId, claim, input);
+  }
+
   if (input.decision === 'approve') {
     if (claim.status === 'approved') {
       return claim;
@@ -334,7 +389,8 @@ export async function reviewPaymentClaim(
       throw new ApiError('invalid_state', 'A rejected payment claim cannot be approved', 409);
     }
     const amount = input.actualAmountYuan ?? claim.list_amount_yuan;
-    return approvePaymentClaim(env, reviewerUserId, claim, amount);
+    const note = input.note?.trim() || null;
+    return approvePaymentClaim(env, reviewerUserId, claim, amount, note);
   }
 
   if (claim.status === 'rejected') {
@@ -348,7 +404,6 @@ export async function reviewPaymentClaim(
   if (!rejectionReason) {
     throw new ApiError('invalid_request', 'Rejection reason is required', 400);
   }
-
-  return rejectPaymentClaim(env, reviewerUserId, claim, rejectionReason);
+  const note = input.note?.trim() || null;
+  return rejectPaymentClaim(env, reviewerUserId, claim, rejectionReason, note);
 }
-

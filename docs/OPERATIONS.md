@@ -19,18 +19,29 @@ audit log entry for every review.
 
 ## Actual revenue correction
 
-When the user actually paid an amount different from the catalog price:
+When the user actually paid an amount different from the catalog price, use the
+admin UI; no direct D1 edit is needed.
+
+For a pending claim:
 
 1. Open the claim in `/admin/#/orders`.
 2. Choose 审核通过.
-3. Set the 实际金额 to the real paid amount.
+3. Set the 实际金额 to the real paid amount and add a 备注 if needed.
 4. Save.
 
-The API stores `actual_amount_yuan` on the claim and the revenue reports use the
-confirmed amount, not the catalog list price. If a claim was already approved
-with the wrong amount, contact an operator with D1 write access and correct
-`payment_claims.actual_amount_yuan`, then verify the change appears in
-`/admin/#/revenue` and is reflected in `audit_logs`.
+For a claim that was already approved with the wrong amount, payment time, or
+note:
+
+1. Open the approved claim in `/admin/#/orders`.
+2. Use 修改已通过订单.
+3. Correct 实收金额, 付款时间, and 备注 as needed.
+4. Choose 保存修改.
+
+The API stores `actual_amount_yuan`, `paid_at`, and `admin_note` on the claim and
+writes an `order.corrected` audit entry with the before and after values. Revenue
+reports keep using the server-controlled `reviewed_at` confirmation time, so a
+corrected payment time does not move confirmed revenue into a different day or
+month. Verify the change appears in `/admin/#/revenue` and `/admin/#/audit`.
 
 ## Password reset
 

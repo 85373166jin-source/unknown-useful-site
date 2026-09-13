@@ -31,12 +31,33 @@ import {
 
 const reviewSchema = z
   .object({
-    decision: z.enum(['approve', 'reject']),
+    decision: z.enum(['approve', 'reject', 'correct']),
     actualAmountYuan: z.number().int().min(0).optional(),
+    paidAt: z.string().min(1).optional(),
+    note: z.string().max(1000).optional(),
     rejectionReason: z.string().min(1).optional()
   })
-  .refine((value) => value.decision !== 'reject' || Boolean(value.rejectionReason), {
-    message: 'Rejection reason is required'
+  .superRefine((value, ctx) => {
+    if (value.decision === 'reject' && !value.rejectionReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Rejection reason is required',
+        path: ['rejectionReason']
+      });
+    }
+
+    if (
+      value.decision === 'correct' &&
+      value.actualAmountYuan === undefined &&
+      value.paidAt === undefined &&
+      value.note === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Specify at least one correction field',
+        path: ['decision']
+      });
+    }
   });
 
 const userMutationSchema = z

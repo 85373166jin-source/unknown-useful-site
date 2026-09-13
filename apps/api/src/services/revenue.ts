@@ -105,7 +105,7 @@ function trailingDaysSeries(claims: ApprovedPaymentClaimRow[], now: number, days
   const totals = new Map(dayStarts.map((dayStart) => [utcDateKey(dayStart), 0]));
 
   for (const claim of claims) {
-    const key = utcDateKey(claim.paid_at);
+    const key = utcDateKey(claim.confirmed_at);
     if (totals.has(key)) {
       totals.set(key, (totals.get(key) ?? 0) + claim.confirmed_amount_yuan);
     }
@@ -135,7 +135,7 @@ function filterByRange(claims: ApprovedPaymentClaimRow[], now: number, range: Re
   const days = rangeDays(range);
   const start = rangeWindowStart(now, days);
   const end = rangeWindowEnd(now);
-  return claims.filter((claim) => claim.paid_at >= start && claim.paid_at < end);
+  return claims.filter((claim) => claim.confirmed_at >= start && claim.confirmed_at < end);
 }
 
 export async function getRevenueReport(env: Env, rangeValue: string | undefined): Promise<RevenueReport> {
@@ -169,8 +169,8 @@ export async function getDashboard(env: Env): Promise<DashboardReport> {
 
   const monthStart = startOfUtcMonth(now);
   const todayStart = startOfUtcDay(now);
-  const monthClaims = claims.filter((claim) => claim.paid_at >= monthStart);
-  const todayClaims = claims.filter((claim) => claim.paid_at >= todayStart);
+  const monthClaims = claims.filter((claim) => claim.confirmed_at >= monthStart);
+  const todayClaims = claims.filter((claim) => claim.confirmed_at >= todayStart);
 
   return {
     confirmedRevenueYuan: sumConfirmedAmounts(claims),
