@@ -74,6 +74,11 @@ async function seedCatalogAndComponents(): Promise<void> {
        VALUES ('anbu', '暗部课程', 29, 'coming_soon', 'courses', 3, '', ?, ?)`
     ).bind(now, now),
     env.DB.prepare(
+      `INSERT INTO products
+        (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+       VALUES ('vip_monthly', 'VIP 会员', 10, 990, 'membership', 'active', 'memberships', 4, 'VIP 会员 30 天', ?, ?)`
+    ).bind(now, now),
+    env.DB.prepare(
       `INSERT INTO product_components (parent_product_id, child_product_id, created_at, updated_at)
        VALUES ('bundle', 'super', ?, ?)`
     ).bind(now, now),
@@ -181,6 +186,58 @@ describe('payment claims API', () => {
   beforeEach(async () => {
     await resetTestDatabase(env.DB);
     await seedCatalogAndComponents();
+  });
+
+async function quote(token: string, productId: string): Promise<Response> {
+  return app.request(
+    `/api/v1/orders/quote?productId=${encodeURIComponent(productId)}`,
+    { headers: authHeaders(token) },
+    env
+  );
+}
+
+  it('quotes normal, VIP, SVIP, and non-discountable membership prices from the server', async () => {
+    const token = await registerUser('alice');
+    const userId = await getUserId(token);
+
+    const normal = await quote(token, 'super');
+    expect(normal.status).toBe(200);
+    await expect(normal.json()).resolves.toMatchObject({
+      productId: 'super',
+      listAmountCents: 2900,
+      actualAmountCents: 2900
+    });
+
+    await setMembership(userId, 'vip', Date.now() + 24 * 60 * 60 * 1000);
+    const vip = await quote(token, 'super');
+    expect(vip.status).toBe(200);
+    await expect(vip.json()).resolves.toMatchObject({
+      productId: 'super',
+      listAmountCents: 2900,
+      actualAmountCents: 2320
+    });
+
+    await setMembership(userId, 'svip', Date.now() + 24 * 60 * 60 * 1000);
+    const svip = await quote(token, 'super');
+    expect(svip.status).toBe(200);
+    await expect(svip.json()).resolves.toMatchObject({
+      productId: 'super',
+      listAmountCents: 2900,
+      actualAmountCents: 1450
+    });
+
+    const membership = await quote(token, 'vip_monthly');
+    expect(membership.status).toBe(200);
+    await expect(membership.json()).resolves.toMatchObject({
+      productId: 'vip_monthly',
+      listAmountCents: 990,
+      actualAmountCents: 990
+    });
+  });
+
+  it('requires authentication for server pricing quotes', async () => {
+    const response = await app.request('/api/v1/orders/quote?productId=super', {}, env);
+    expect(response.status).toBe(401);
   });
 
   it('creates a pending claim with a HY order number and private screenshot', async () => {

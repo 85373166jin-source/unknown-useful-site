@@ -1,47 +1,74 @@
 # Operations
 
 Day-to-day operations for the payment review, user support, and backup tasks.
-All admin actions require an administrator session. The public/admin UI lives at
-`/admin/`; API endpoints require the same admin bearer token as the UI.
+All owner-only admin actions require an owner session. The public/admin UI lives at
+`/admin/`; API endpoints require the same owner bearer token as the UI.
 
 ## Daily payment review
 
 1. Open the admin dashboard at `/admin/#/dashboard` and check 待审核订单.
 2. Open `/admin/#/orders` and review each pending claim in 订单审核.
-3. Compare the submitted screenshot and 付款时间 against the expected product
-   price.
-4. For a valid claim, choose 审核通过 and enter the actual amount if it differs
-   from the listed amount.
+3. Compare the submitted screenshot and 付款时间 against the server quote.
+4. For a valid claim, choose 审核通过 and confirm the exact 实收金额. The form
+   accepts yuan and cents, converts the value without rounding, and sends
+   `actualAmountCents`.
 5. For an invalid claim, choose 审核驳回 and enter a rejection reason.
 
-The backend records the administrator, the decision, the actual amount, and an
-audit log entry for every review.
+The API stores exact integer cents in `list_amount_cents` and
+`actual_amount_cents`; the legacy `*_yuan` columns exist only for migration
+compatibility. The backend records the owner, decision, exact cents, and an audit
+log entry for every review. Use the two-decimal UI or a cents value for support
+notes: 990 cents is `9.90` yuan and 2320 cents is `23.20` yuan.
 
-## Actual revenue correction
+## Exact-cent approval and correction
 
-When the user actually paid an amount different from the catalog price, use the
-admin UI; no direct D1 edit is needed.
+When the user paid an amount different from the server quote, use the owner UI;
+do not edit D1 directly.
 
 For a pending claim:
 
 1. Open the claim in `/admin/#/orders`.
 2. Choose 审核通过.
-3. Set the 实际金额 to the real paid amount and add a 备注 if needed.
-4. Save.
+3. Set the exact 实收金额 in yuan and cents, for example `23.20`, and add a
+   备注 if needed.
+4. Save. The browser sends `actualAmountCents: 2320`, and the API never trusts a
+   browser-supplied list price.
 
 For a claim that was already approved with the wrong amount, payment time, or
 note:
 
 1. Open the approved claim in `/admin/#/orders`.
 2. Use 修改已通过订单.
-3. Correct 实收金额, 付款时间, and 备注 as needed.
+3. Correct 实收金额, 付款时间, and 备注 as needed. An unchanged amount is submitted
+   from its exact cent snapshot instead of a rounded yuan value.
 4. Choose 保存修改.
 
-The API stores `actual_amount_yuan`, `paid_at`, and `admin_note` on the claim and
-writes an `order.corrected` audit entry with the before and after values. Revenue
-reports keep using the server-controlled `reviewed_at` confirmation time, so a
-corrected payment time does not move confirmed revenue into a different day or
-month. Verify the change appears in `/admin/#/revenue` and `/admin/#/audit`.
+The API stores `actual_amount_cents`, `paid_at`, and `admin_note` and writes an
+`order.corrected` audit entry with the before and after values. Revenue reports
+keep using the server-controlled `reviewed_at` confirmation time, so a corrected
+payment time does not move confirmed revenue into a different day or month.
+Verify the change appears in `/admin/#/revenue` and `/admin/#/audit`.
+
+## Membership approval and correction
+
+For VIP or SVIP membership approval:
+
+1. Review the membership claim's exact `list_amount_cents` and
+   `actualAmountCents` values in 订单审核.
+2. Approve the claim. The server applies the membership tier and extends an active
+   same-tier renewal atomically by 30 days; it does not trust a price or expiry
+   supplied by the browser.
+3. Verify the resulting tier, expiry, and `order.approved` audit entry.
+
+For membership correction:
+
+1. Open `/admin/#/memberships`.
+2. Find the user and set the correct tier and expiry.
+3. Save and verify the `admin.user.membership` audit entry.
+
+Membership products are non-discountable, so a 990-cent VIP product remains
+`9.90` yuan for VIP and SVIP users. Course discounts still use integer cents:
+a 2900-cent course is `23.20` yuan for VIP and `14.50` yuan for SVIP.
 
 ## 修改站长和课程凭据
 

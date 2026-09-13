@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CATALOG, centsToYuanString, type CourseProductId } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
@@ -8,8 +8,14 @@ type ClaimableProductId = CourseProductId | 'vip_monthly' | 'svip_monthly';
 interface ClaimableProduct {
   id: ClaimableProductId;
   title: string;
-  priceCents: number;
   status: 'active' | 'presale';
+}
+
+interface ProductQuote {
+  productId: ClaimableProductId;
+  title: string;
+  listAmountCents: number;
+  actualAmountCents: number;
 }
 
 const COURSE_PRODUCTS: ClaimableProduct[] = (Object.keys(CATALOG.products) as CourseProductId[])
@@ -18,13 +24,12 @@ const COURSE_PRODUCTS: ClaimableProduct[] = (Object.keys(CATALOG.products) as Co
   .map((product) => ({
     id: product.id,
     title: product.title,
-    priceCents: product.priceYuan * 100,
     status: product.status
   }));
 
 const MEMBERSHIP_PRODUCTS: ClaimableProduct[] = [
-  { id: 'vip_monthly', title: 'VIP 会员', priceCents: 990, status: 'active' },
-  { id: 'svip_monthly', title: 'SVIP 豪华会员', priceCents: 1990, status: 'active' }
+  { id: 'vip_monthly', title: 'VIP 会员', status: 'active' },
+  { id: 'svip_monthly', title: 'SVIP 豪华会员', status: 'active' }
 ];
 
 const CLAIMABLE_PRODUCTS = [...COURSE_PRODUCTS, ...MEMBERSHIP_PRODUCTS];
@@ -80,15 +85,48 @@ export function PaymentClaimPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ClaimPayload | null>(null);
+  const [quote, setQuote] = useState<ProductQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   const qrUrls = paymentQrUrls();
-  const selectedProduct =
-    CLAIMABLE_PRODUCTS.find((product) => product.id === productId) ?? CLAIMABLE_PRODUCTS[0]!;
+
+  useEffect(() => {
+    let cancelled = false;
+    setQuote(null);
+    setQuoteError(null);
+    setQuoteLoading(true);
+
+    apiFetch<ProductQuote>(`/orders/quote?productId=${encodeURIComponent(productId)}`)
+      .then((data) => {
+        if (!cancelled) {
+          setQuote(data);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setQuoteError(caught instanceof ApiError ? caught.message : '报价加载失败，请稍后重试');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setQuoteLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!screenshot) {
       setError('请选择付款截图');
+      return;
+    }
+    if (!quote || quote.productId !== productId) {
+      setError('报价尚未加载完成，请稍后重试');
       return;
     }
 
@@ -166,6 +204,7 @@ export function PaymentClaimPage() {
             <select
               id="payment-product"
               value={productId}
+              disabled={submitting}
               onChange={(event) => {
                 setProductId(event.target.value as ClaimableProductId);
                 setResult(null);
@@ -174,19 +213,26 @@ export function PaymentClaimPage() {
             >
               {CLAIMABLE_PRODUCTS.map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.title}（{formatCents(product.priceCents)} 元）
+                  {product.title}
                 </option>
               ))}
             </select>
           </div>
 
           <p className="payment-claim-form__price">
-            当前标价：
-            {formatCents(result?.listAmountCents ?? selectedProduct.priceCents)} 元
+            {quoteLoading ? (
+              '正在加载报价…'
+            ) : quoteError ? (
+              quoteError
+            ) : quote ? (
+              <>当前标价：{formatCents(quote.listAmountCents)} 元</>
+            ) : (
+              '正在加载报价…'
+            )}
           </p>
-          {result?.actualAmountCents !== null && result?.actualAmountCents !== undefined ? (
+          {quote ? (
             <p className="payment-claim-form__payable">
-              当前应付：{formatCents(result.actualAmountCents)} 元
+              当前应付：{formatCents(quote.actualAmountCents)} 元
             </p>
           ) : null}
 
@@ -224,7 +270,11 @@ export function PaymentClaimPage() {
             />
           </div>
 
-          <button className="button button--primary" type="submit" disabled={submitting}>
+          <button
+            className="button button--primary"
+            type="submit"
+            disabled={submitting || quoteLoading || !quote || quote.productId !== productId}
+          >
             提交付款申请
           </button>
         </form>

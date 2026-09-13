@@ -1,5 +1,5 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
-import { type MembershipTier, type PermissionRole } from '@site/contracts';
+import { MEMBERSHIP_DAYS, MEMBERSHIP_DAY_MS, type MembershipTier, type PermissionRole } from '@site/contracts';
 
 export type UserRole = 'user' | 'admin';
 export type UserStatus = 'active' | 'disabled';
@@ -111,6 +111,53 @@ export function buildUpdateUserMembershipStatement(
   return db
     .prepare('UPDATE users SET membership_tier = ?, membership_expires_at = ?, updated_at = ? WHERE id = ?')
     .bind(tier, expiresAt, updatedAt, userId);
+}
+
+export function buildApplyMembershipPurchaseStatement(
+  db: D1Database,
+  userId: string,
+  tier: 'vip' | 'svip',
+  claimOrderNo: string,
+  now: number
+): D1PreparedStatement {
+  const extensionMs = MEMBERSHIP_DAYS * MEMBERSHIP_DAY_MS;
+  return db
+    .prepare(
+      `UPDATE users
+       SET membership_tier = ?,
+           membership_expires_at = CASE
+             WHEN membership_tier = ?
+               AND membership_expires_at IS NOT NULL
+               AND membership_expires_at > ?
+               THEN membership_expires_at + ?
+             ELSE ?
+           END,
+           updated_at = ?
+       WHERE id = ?
+         AND EXISTS (
+           SELECT 1 FROM payment_claims
+           WHERE order_no = ? AND user_id = ? AND status = 'pending'
+         )
+         AND NOT (
+           membership_tier = 'svip'
+           AND membership_expires_at IS NOT NULL
+           AND membership_expires_at > ?
+           AND ? = 'vip'
+         )`
+    )
+    .bind(
+      tier,
+      tier,
+      now,
+      extensionMs,
+      now + extensionMs,
+      now,
+      userId,
+      claimOrderNo,
+      userId,
+      now,
+      tier
+    );
 }
 
 export function buildBindUserContactStatement(

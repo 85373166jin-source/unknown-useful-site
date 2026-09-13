@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
-import { CATALOG } from '@site/contracts';
+import { CATALOG, centsToYuanString } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
 type RevenueRange = '7d' | '30d' | '90d' | 'all';
 
 interface RevenuePoint {
   date: string;
-  yuan: number;
+  cents?: number;
+  yuan?: number;
 }
+
+const MEMBERSHIP_PRODUCT_TITLES: Record<string, string> = {
+  vip_monthly: 'VIP 会员',
+  svip_monthly: 'SVIP 豪华会员'
+};
 
 interface RevenueReport {
   range: RevenueRange;
   seriesDays: number;
-  totalYuan: number;
+  totalCents?: number;
+  totalYuan?: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
   series: RevenuePoint[];
@@ -25,8 +32,16 @@ const RANGE_OPTIONS: Array<{ value: RevenueRange; label: string }> = [
   { value: 'all', label: '全部' }
 ];
 
-function formatYuan(value: number): string {
-  return `${value.toLocaleString('zh-CN')} 元`;
+function centsFromLegacyYuan(value: number | undefined): number {
+  return value === undefined ? 0 : Math.round(value * 100);
+}
+
+function pointCents(point: RevenuePoint): number {
+  return point.cents ?? centsFromLegacyYuan(point.yuan);
+}
+
+function formatCents(value: number): string {
+  return `${centsToYuanString(value)} 元`;
 }
 
 function maxValue(values: number[]): number {
@@ -68,24 +83,31 @@ export function AdminRevenue() {
     };
   }, [range]);
 
-  const productEntries = Object.keys(CATALOG.products).map((productId) => ({
+  const productIds = Array.from(
+    new Set([...Object.keys(CATALOG.products), ...Object.keys(report?.byProduct ?? {})])
+  );
+  const productEntries = productIds.map((productId) => ({
     id: productId,
-    title: CATALOG.products[productId as keyof typeof CATALOG.products]?.title ?? productId,
-    yuan: report?.byProduct[productId] ?? 0
+    title:
+      CATALOG.products[productId as keyof typeof CATALOG.products]?.title ??
+      MEMBERSHIP_PRODUCT_TITLES[productId] ??
+      productId,
+    cents: report?.byProduct[productId] ?? 0
   }));
-  const productMax = maxValue(productEntries.map((entry) => entry.yuan));
+  const productMax = maxValue(productEntries.map((entry) => entry.cents));
 
   const categoryEntries = CATALOG.categories
     .filter((category) => category.id !== 'all')
     .map((category) => ({
       id: category.id,
       title: category.title,
-      yuan: report?.byCategory[category.id] ?? 0
+      cents: report?.byCategory[category.id] ?? 0
     }));
-  const categoryMax = maxValue(categoryEntries.map((entry) => entry.yuan));
+  const categoryMax = maxValue(categoryEntries.map((entry) => entry.cents));
 
   const series = report?.series ?? [];
-  const seriesMax = maxValue(series.map((point) => point.yuan));
+  const seriesMax = maxValue(series.map(pointCents));
+  const totalCents = report?.totalCents ?? centsFromLegacyYuan(report?.totalYuan);
 
   return (
     <section className="admin-page">
@@ -114,7 +136,7 @@ export function AdminRevenue() {
       <div className="admin-metrics admin-metrics--single">
         <article className="admin-metric">
           <span className="admin-metric__label">网站已确认收入</span>
-          <strong className="admin-metric__value">{formatYuan(report?.totalYuan ?? 0)}</strong>
+          <strong className="admin-metric__value">{formatCents(totalCents)}</strong>
         </article>
       </div>
 
@@ -127,10 +149,10 @@ export function AdminRevenue() {
               <span className="admin-hbar__track">
                 <span
                   className="admin-hbar__fill"
-                  style={{ width: `${(entry.yuan / productMax) * 100}%` }}
+                  style={{ width: `${(entry.cents / productMax) * 100}%` }}
                 />
               </span>
-              <strong className="admin-hbar__value">{formatYuan(entry.yuan)}</strong>
+              <strong className="admin-hbar__value">{formatCents(entry.cents)}</strong>
             </div>
           ))}
         </div>
@@ -145,10 +167,10 @@ export function AdminRevenue() {
               <span className="admin-hbar__track">
                 <span
                   className="admin-hbar__fill"
-                  style={{ width: `${(entry.yuan / categoryMax) * 100}%` }}
+                  style={{ width: `${(entry.cents / categoryMax) * 100}%` }}
                 />
               </span>
-              <strong className="admin-hbar__value">{formatYuan(entry.yuan)}</strong>
+              <strong className="admin-hbar__value">{formatCents(entry.cents)}</strong>
             </div>
           ))}
         </div>
@@ -157,16 +179,19 @@ export function AdminRevenue() {
       <div className="admin-panel">
         <h2>每日收入趋势</h2>
         <div className="admin-bars" aria-label="每日收入趋势">
-          {series.map((point) => (
+          {series.map((point) => {
+            const cents = pointCents(point);
+            return (
             <div className="admin-bar" key={point.date}>
-              <span className="admin-bar__value">{point.yuan}</span>
+              <span className="admin-bar__value">{centsToYuanString(cents)}</span>
               <span
                 className="admin-bar__fill"
-                style={{ height: `${Math.max((point.yuan / seriesMax) * 100, point.yuan > 0 ? 4 : 0)}%` }}
+                style={{ height: `${Math.max((cents / seriesMax) * 100, cents > 0 ? 4 : 0)}%` }}
               />
               <span className="admin-bar__label">{shortDateLabel(point.date)}</span>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </section>

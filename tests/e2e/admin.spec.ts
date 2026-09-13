@@ -20,7 +20,7 @@ test('dashboard confirmed revenue moves from 0 to the reviewed actual amount', a
 
   await page.goto('/admin/#/dashboard');
   const confirmedMetric = page.locator('.admin-metric', { hasText: '网站已确认收入' }).locator('.admin-metric__value');
-  await expect(confirmedMetric).toHaveText('0 元');
+  await expect(confirmedMetric).toHaveText('0.00 元');
 
   await page.getByRole('link', { name: '订单审核' }).click();
   const orderRow = page.locator('tr', { hasText: claim.orderNo });
@@ -34,7 +34,7 @@ test('dashboard confirmed revenue moves from 0 to the reviewed actual amount', a
   await expect(page.locator('tr', { hasText: claim.orderNo }).locator('td', { hasText: '已通过' })).toBeVisible();
 
   await page.getByRole('link', { name: '仪表盘' }).click();
-  await expect(confirmedMetric).toHaveText('60 元');
+  await expect(confirmedMetric).toHaveText('60.00 元');
 });
 
 test('normal users see no admin navigation', async ({ page, request }) => {

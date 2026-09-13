@@ -109,33 +109,18 @@ npm run db:migrate:remote
 ```
 
 `npm run db:migrate:remote` runs `wrangler d1 migrations apply DB --remote` from
-`apps/api`.
+`apps/api`. Apply `apps/api/migrations/0003_identity_membership_money.sql`
+before deploying the Worker that reads `price_cents`,
+`list_amount_cents`, and `actual_amount_cents`. The legacy `*_yuan` columns
+remain only for migration compatibility; all new reads, writes, reports, and API
+payloads use integer cents. The membership products are inserted by the guarded
+membership seed step after the first Worker deployment.
 
 ### Seeding
-
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
 which starts the seed Worker locally and posts to `/seed` with a one-time
-`SEED_TOKEN`.
-
-Production seeding is guarded and never runs through the public Worker. Run it
-with:
-
-```powershell
-npm run db:seed:remote
-```
-
-Run this after the Worker has been deployed at least once (see **Cloudflare Worker**) so Wrangler can bind the remote secrets. The command starts a temporary `wrangler dev --remote` session for
-`apps/api/src/db/seed.ts`, authenticates with a one-time `SEED_TOKEN`, and posts
-to `/seed` on `127.0.0.1` only. The seed Worker rejects requests without the
-token and is never mounted by `apps/api/src/index.ts`, so the public main entry
-has no `/seed` route. The temporary remote dev session uses the Worker's remote
-D1, Workers KV, and secret bindings, so `ADMIN_PASSWORD_HASH`,
-`SUPER_COURSE_PASSWORD_HASH`, and `ANBU_COURSE_PASSWORD_HASH` are read from the
-Cloudflare secrets rather than from files.
-
-Set `$env:SEED_TOKEN` to a fixed value if the run must use a known token;
-otherwise the script generates one for the session. Do not deploy
-`apps/api/src/db/seed.ts` to production.
+`SEED_TOKEN`. Production membership products are seeded only after the
+migration and first Worker deployment, as described in **Cloudflare Worker**.
 
 ## Workers KV
 
@@ -235,6 +220,18 @@ above are in place.
    ```
 
    The response must be `{ "ok": true }`.
+
+4. After the first successful Worker deployment, run the guarded membership seed:
+
+   ```powershell
+   npm run db:seed:remote
+   ```
+
+   Required order: apply D1 migrations, deploy the Worker, then run the
+   membership seed that inserts the VIP and SVIP membership products. The seed
+   Worker is `apps/api/src/db/seed.ts`, is temporary, uses a one-time
+   `SEED_TOKEN`, and is never mounted by `apps/api/src/index.ts` in the public
+   main entry.
 
 ## Rollback
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CATALOG, type CourseProductId, type ProductId } from '@site/contracts';
+import { CATALOG, centsToYuanString, yuanToCents, type CourseProductId, type ProductId } from '@site/contracts';
 import { AUTH_EXPIRED_EVENT, ApiError, apiFetch, apiUrl, clearSessionToken, getSessionToken } from '../../lib/api';
 
 type OrderStatus = 'pending' | 'approved' | 'rejected';
@@ -9,8 +9,10 @@ interface AdminOrder {
   orderNo: string;
   userId: string;
   productId: ProductId;
-  listAmountYuan: number;
-  actualAmountYuan: number | null;
+  listAmountCents?: number;
+  actualAmountCents?: number | null;
+  listAmountYuan?: number;
+  actualAmountYuan?: number | null;
   paidAt: number;
   contactText: string;
   status: OrderStatus;
@@ -36,19 +38,40 @@ function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
 }
 
-function formatYuan(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
+function formatCents(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—';
   }
-  return `${value.toLocaleString('zh-CN')} 元`;
+  return `${centsToYuanString(value)} 元`;
+}
+
+function orderListCents(order: AdminOrder): number {
+  return order.listAmountCents ?? Math.round((order.listAmountYuan ?? 0) * 100);
+}
+
+function orderActualCents(order: AdminOrder): number | null {
+  if (order.actualAmountCents !== undefined) {
+    return order.actualAmountCents;
+  }
+  return order.actualAmountYuan === null || order.actualAmountYuan === undefined
+    ? null
+    : Math.round(order.actualAmountYuan * 100);
 }
 
 function isCourseProductId(productId: ProductId): productId is CourseProductId {
   return productId in CATALOG.products;
 }
 
+const MEMBERSHIP_PRODUCT_TITLES: Partial<Record<ProductId, string>> = {
+  vip_monthly: 'VIP 会员',
+  svip_monthly: 'SVIP 豪华会员'
+};
+
 function productTitle(productId: ProductId): string {
-  return isCourseProductId(productId) ? CATALOG.products[productId].title : productId;
+  if (isCourseProductId(productId)) {
+    return CATALOG.products[productId].title;
+  }
+  return MEMBERSHIP_PRODUCT_TITLES[productId] ?? productId;
 }
 
 function toDateTimeLocalValue(timestamp: number): string {
@@ -151,10 +174,14 @@ export function AdminOrders() {
       return;
     }
 
-    const amount = Number(actualAmount);
-    if (decision === 'approve' && (!Number.isInteger(amount) || amount < 0)) {
-      setError('实收金额必须是非负整数');
-      return;
+    let amountCents: number | null = null;
+    if (decision === 'approve') {
+      try {
+        amountCents = yuanToCents(actualAmount);
+      } catch {
+        setError('实收金额必须是有效金额，最多两位小数');
+        return;
+      }
     }
 
     if (decision === 'reject' && !rejectionReason.trim()) {
@@ -164,7 +191,7 @@ export function AdminOrders() {
 
     const body: Record<string, unknown> = { decision };
     if (decision === 'approve') {
-      body.actualAmountYuan = amount;
+      body.actualAmountCents = amountCents;
     } else {
       body.rejectionReason = rejectionReason.trim();
     }
@@ -196,9 +223,11 @@ export function AdminOrders() {
       return;
     }
 
-    const amount = Number(actualAmount);
-    if (!Number.isInteger(amount) || amount < 0) {
-      setError('实收金额必须是非负整数');
+    let amountCents: number;
+    try {
+      amountCents = yuanToCents(actualAmount);
+    } catch {
+      setError('实收金额必须是有效金额，最多两位小数');
       return;
     }
 
@@ -214,7 +243,7 @@ export function AdminOrders() {
         method: 'PATCH',
         body: {
           decision: 'correct',
-          actualAmountYuan: amount,
+          actualAmountCents: amountCents,
           paidAt: new Date(paidAt).toISOString(),
           note: note.trim()
         }
@@ -231,7 +260,7 @@ export function AdminOrders() {
 
   function selectOrder(order: AdminOrder): void {
     setSelectedOrderNo(order.orderNo);
-    setActualAmount(String(order.actualAmountYuan ?? order.listAmountYuan));
+    setActualAmount(centsToYuanString(orderActualCents(order) ?? orderListCents(order)));
     setRejectionReason('');
     setNote(order.adminNote ?? '');
     setPaidAt(toDateTimeLocalValue(order.paidAt));
@@ -270,8 +299,8 @@ export function AdminOrders() {
                 <tr key={order.id}>
                   <td>{order.orderNo}</td>
                   <td>{productTitle(order.productId)}</td>
-                  <td>{formatYuan(order.listAmountYuan)}</td>
-                  <td>{formatYuan(order.actualAmountYuan)}</td>
+                  <td>{formatCents(orderListCents(order))}</td>
+                  <td>{formatCents(orderActualCents(order))}</td>
                   <td>{STATUS_LABELS[order.status]}</td>
                   <td>{order.contactText}</td>
                   <td>{formatDateTime(order.paidAt)}</td>
@@ -302,7 +331,7 @@ export function AdminOrders() {
             </div>
             <div>
               <dt>标价</dt>
-              <dd>{formatYuan(selectedOrder.listAmountYuan)}</dd>
+              <dd>{formatCents(orderListCents(selectedOrder))}</dd>
             </div>
             <div>
               <dt>联系方式</dt>
@@ -351,7 +380,7 @@ export function AdminOrders() {
                     id="admin-actual-amount"
                     type="number"
                     min="0"
-                    step="1"
+                    step="0.01"
                     value={actualAmount}
                     onChange={(event) => setActualAmount(event.target.value)}
                     required
@@ -408,7 +437,7 @@ export function AdminOrders() {
                     id="admin-correct-amount"
                     type="number"
                     min="0"
-                    step="1"
+                    step="0.01"
                     value={actualAmount}
                     onChange={(event) => setActualAmount(event.target.value)}
                     required

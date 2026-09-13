@@ -27,4 +27,24 @@ describe('HomePage', () => {
     expect(screen.getByText('火影课程')).toBeInTheDocument();
     expect(screen.getByText('免费资源专区')).toBeInTheDocument();
   });
+
+  it('links membership as an available product instead of coming soon', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(CATALOG), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+    );
+
+    render(<HomePage />, { wrapper: TestProviders });
+
+    const membership = screen.getByRole('link', { name: /平台会员权益/ });
+    expect(membership).toHaveAttribute('href', '/membership');
+    expect(membership).toHaveTextContent('已上线');
+    expect(membership).not.toHaveTextContent('即将上线');
+    expect(membership).not.toHaveTextContent('规划中');
+  });
 });

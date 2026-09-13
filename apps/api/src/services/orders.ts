@@ -3,7 +3,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
-import { buildUpdateUserMembershipStatement, findUserById } from '../repositories/users';
+import { buildApplyMembershipPurchaseStatement, findUserById } from '../repositories/users';
 import {
   findPaymentClaimByOrderNo,
   buildUpdatePaymentClaimReviewStatement,
@@ -15,7 +15,8 @@ import {
   listProductComponentIds,
   updatePaymentClaimCorrection,
   updatePaymentClaimReview,
-  type PaymentClaimRow
+  type PaymentClaimRow,
+  type ProductRow
 } from '../repositories/orders';
 import { recordAudit } from './audit';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
@@ -40,6 +41,13 @@ export interface CreatePaymentClaimInput {
   paidAt: string;
   contactText: string;
   screenshot: File;
+}
+
+export interface ProductQuote {
+  productId: ProductId;
+  title: string;
+  listAmountCents: number;
+  actualAmountCents: number;
 }
 
 export interface ReviewPaymentClaimInput {
@@ -164,6 +172,56 @@ function toPaymentClaimAudit(row: PaymentClaimRow): PaymentClaimAudit {
   };
 }
 
+function listAmountCentsForProduct(product: { price_cents: number; price_yuan: number }): number {
+  return product.price_cents > 0 ? product.price_cents : product.price_yuan * 100;
+}
+
+async function loadClaimableProduct(env: Env, productId: string) {
+  const parsedProductId = ProductIdSchema.safeParse(productId);
+  if (!parsedProductId.success) {
+    throw new ApiError('invalid_product', 'Unsupported product', 400);
+  }
+
+  const product = await findProductById(env.DB, parsedProductId.data);
+  if (!product) {
+    throw new ApiError('product_not_found', 'Product not found', 404);
+  }
+  if (!CLAIMABLE_PRODUCT_STATUSES.has(product.status)) {
+    throw new ApiError('product_not_available', 'This product is not available for claims yet', 409);
+  }
+
+  return { ...product, id: parsedProductId.data };
+}
+
+export async function getProductQuote(
+  env: Env,
+  userId: string,
+  productId: string
+): Promise<ProductQuote> {
+  const product = await loadClaimableProduct(env, productId);
+  const user = await findUserById(env.DB, userId);
+  if (!user) {
+    throw new ApiError('unauthorized', 'Account is not active', 401);
+  }
+
+  const membership = effectiveMembership(
+    { tier: user.membership_tier, expiresAt: user.membership_expires_at },
+    Date.now()
+  );
+  const listAmountCents = listAmountCentsForProduct(product);
+  const actualAmountCents = priceProductForUser(
+    { price_cents: listAmountCents, product_type: product.product_type },
+    membership
+  );
+
+  return {
+    productId: product.id,
+    title: product.title,
+    listAmountCents,
+    actualAmountCents
+  };
+}
+
 async function assertProductCanBeClaimed(
   env: Env,
   userId: string,
@@ -189,21 +247,8 @@ export async function createPaymentClaim(
   userId: string,
   input: CreatePaymentClaimInput
 ): Promise<PaymentClaimRow> {
-  const parsedProductId = ProductIdSchema.safeParse(input.productId);
-  if (!parsedProductId.success) {
-    throw new ApiError('invalid_product', 'Unsupported product', 400);
-  }
-  const productId = parsedProductId.data;
-
-  const product = await findProductById(env.DB, productId);
-  if (!product) {
-    throw new ApiError('product_not_found', 'Product not found', 404);
-  }
-
-  if (!CLAIMABLE_PRODUCT_STATUSES.has(product.status)) {
-    throw new ApiError('product_not_available', 'This product is not available for claims yet', 409);
-  }
-
+  const product = await loadClaimableProduct(env, input.productId);
+  const productId = product.id;
   const paidAt = Date.parse(input.paidAt);
   if (!Number.isFinite(paidAt)) {
     throw new ApiError('invalid_paid_at', 'Paid time must be a valid date', 400);
@@ -225,7 +270,7 @@ export async function createPaymentClaim(
     { tier: user.membership_tier, expiresAt: user.membership_expires_at },
     Date.now()
   );
-  const listAmountCents = product.price_cents > 0 ? product.price_cents : product.price_yuan * 100;
+  const listAmountCents = listAmountCentsForProduct(product);
   const actualAmountCents = priceProductForUser(
     { price_cents: listAmountCents, product_type: product.product_type },
     membership
@@ -330,8 +375,10 @@ async function approvePaymentClaim(
   const now = Date.now();
   const purchasedTier = MEMBERSHIP_PURCHASE_TIERS[claim.product_id as ProductId];
   let membershipBefore: { tier: 'normal' | 'vip' | 'svip'; expiresAt: number | null } | null = null;
-  let membershipAfter: { tier: 'vip' | 'svip'; expiresAt: number } | null = null;
-  let membershipStatement: ReturnType<typeof buildUpdateUserMembershipStatement> | null = null;
+  let membershipStatement: ReturnType<typeof buildApplyMembershipPurchaseStatement> | null = null;
+  let expectedMembership:
+    | { userId: string; tier: 'vip' | 'svip'; activeAfter: number }
+    | undefined;
 
   if (purchasedTier) {
     const user = await findUserById(env.DB, claim.user_id);
@@ -343,9 +390,8 @@ async function approvePaymentClaim(
       { tier: user.membership_tier, expiresAt: user.membership_expires_at },
       now
     );
-    let nextMembership;
     try {
-      nextMembership = applyMembershipPurchase(effective, purchasedTier, now);
+      applyMembershipPurchase(effective, purchasedTier, now);
     } catch (error) {
       if (error instanceof Error && error.message === 'SVIP cannot downgrade to VIP') {
         throw new ApiError('membership_downgrade', 'SVIP cannot be downgraded to VIP', 409);
@@ -354,14 +400,18 @@ async function approvePaymentClaim(
     }
 
     membershipBefore = effective;
-    membershipAfter = nextMembership;
-    membershipStatement = buildUpdateUserMembershipStatement(
+    membershipStatement = buildApplyMembershipPurchaseStatement(
       env.DB,
       claim.user_id,
-      nextMembership.tier,
-      nextMembership.expiresAt,
+      purchasedTier,
+      claim.order_no,
       now
     );
+    expectedMembership = {
+      userId: claim.user_id,
+      tier: purchasedTier,
+      activeAfter: now
+    };
   }
 
   const reviewStatement = buildUpdatePaymentClaimReviewStatement(env.DB, claim.order_no, {
@@ -372,15 +422,48 @@ async function approvePaymentClaim(
     note,
     reviewedBy: reviewerUserId,
     reviewedAt: now,
-    updatedAt: now
+    updatedAt: now,
+    expectedStatus: 'pending',
+    expectedMembership
   });
-  await env.DB.batch(
-    membershipStatement ? [reviewStatement, membershipStatement] : [reviewStatement]
-  );
+  const statements = membershipStatement
+    ? [membershipStatement, reviewStatement]
+    : [reviewStatement];
+  const results = await env.DB.batch(statements);
+  const reviewResult = results[results.length - 1];
+  if ((reviewResult?.meta?.changes ?? 0) !== 1) {
+    const currentUser = purchasedTier ? await findUserById(env.DB, claim.user_id) : null;
+    const currentMembership = currentUser
+      ? effectiveMembership(
+          { tier: currentUser.membership_tier, expiresAt: currentUser.membership_expires_at },
+          now
+        )
+      : null;
+    if (currentMembership?.tier === 'svip' && purchasedTier === 'vip') {
+      throw new ApiError('membership_downgrade', 'SVIP cannot be downgraded to VIP', 409);
+    }
+    throw new ApiError('invalid_state', 'Payment claim is no longer pending', 409);
+  }
 
   const updated = await findPaymentClaimByOrderNo(env.DB, claim.order_no);
   if (!updated) {
     throw new Error('Failed to load the updated payment claim');
+  }
+
+  let membershipAfter: { tier: 'vip' | 'svip'; expiresAt: number } | null = null;
+  if (purchasedTier) {
+    const updatedUser = await findUserById(env.DB, claim.user_id);
+    if (
+      !updatedUser ||
+      (updatedUser.membership_tier !== 'vip' && updatedUser.membership_tier !== 'svip') ||
+      updatedUser.membership_expires_at === null
+    ) {
+      throw new Error('Failed to load the updated membership');
+    }
+    membershipAfter = {
+      tier: updatedUser.membership_tier,
+      expiresAt: updatedUser.membership_expires_at
+    };
   }
 
   if (!purchasedTier) {

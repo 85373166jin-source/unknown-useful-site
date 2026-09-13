@@ -60,11 +60,26 @@ describe('deployment documentation', () => {
     expect(secrets).toBeLessThan(worker);
   });
 
-  it('orders migrations before the first Worker deployment', () => {
+  it('orders migrations before the first Worker deployment and membership seed after it', () => {
     const migrate = deploymentDoc.indexOf('npm run db:migrate:remote');
     const worker = deploymentDoc.indexOf('## Cloudflare Worker');
+    const seed = deploymentDoc.indexOf('npm run db:seed:remote');
     expect(migrate).toBeGreaterThan(-1);
+    expect(worker).toBeGreaterThan(-1);
+    expect(seed).toBeGreaterThan(-1);
     expect(migrate).toBeLessThan(worker);
+    expect(worker).toBeLessThan(seed);
+    expect(deploymentDoc).toContain('0003_identity_membership_money.sql');
+    expect(deploymentDoc).toMatch(/membership products/i);
+  });
+
+  it('documents exact-cent approval, correction, and membership operations', () => {
+    expect(operationsDoc).toContain('actual_amount_cents');
+    expect(operationsDoc).toContain('list_amount_cents');
+    expect(operationsDoc).toMatch(/membership approval/i);
+    expect(operationsDoc).toMatch(/membership correction/i);
+    expect(operationsDoc).toMatch(/9.90/);
+    expect(operationsDoc).toMatch(/23.20/);
   });
 
   it('documents a guarded production seed path that is not mounted by the main entry', () => {

@@ -33,27 +33,28 @@ type AdminUser = {
 };
 
 type Dashboard = {
-  confirmedRevenueYuan: number;
-  monthRevenueYuan: number;
-  todayRevenueYuan: number;
-  pendingAmountYuan: number;
+  confirmedRevenueCents: number;
+  monthRevenueCents: number;
+  todayRevenueCents: number;
+  pendingAmountCents: number;
   pendingOrderCount: number;
+  totalCents: number;
   userCount: number;
   newUserCount: number;
   paidUserCount: number;
   repeatBuyerCount: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
-  series: Array<{ date: string; yuan: number }>;
+  series: Array<{ date: string; cents: number }>;
 };
 
 type Revenue = {
   range: '7d' | '30d' | '90d' | 'all';
   seriesDays: number;
-  totalYuan: number;
+  totalCents: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
-  series: Array<{ date: string; yuan: number }>;
+  series: Array<{ date: string; cents: number }>;
 };
 
 type AuditEntry = {
@@ -89,6 +90,11 @@ async function seedCatalog(): Promise<void> {
     env.DB.prepare(
       `INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, description, created_at, updated_at)
        VALUES ('bundle', '火影合集', 49, 'presale', 'courses', 3, '', ?, ?)`
+    ).bind(now, now),
+    env.DB.prepare(
+      `INSERT INTO products
+        (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+       VALUES ('vip_monthly', 'VIP 会员', 10, 990, 'membership', 'active', 'memberships', 4, 'VIP 会员 30 天', ?, ?)`
     ).bind(now, now),
     env.DB.prepare(
       `INSERT INTO product_components (parent_product_id, child_product_id, created_at, updated_at)
@@ -151,9 +157,9 @@ async function registerUser(
   return { token: registered.token, userId: meBody.user.id };
 }
 
-function claimForm(overrides: { paidAt?: string; contactText?: string } = {}): FormData {
+function claimForm(overrides: { productId?: string; paidAt?: string; contactText?: string } = {}): FormData {
   const form = new FormData();
-  form.set('productId', 'bundle');
+  form.set('productId', overrides.productId ?? 'bundle');
   form.set('paidAt', overrides.paidAt ?? new Date().toISOString());
   form.set('contactText', overrides.contactText ?? 'alice@example.com');
   form.set('screenshot', new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' }));
@@ -217,7 +223,7 @@ describe('admin reporting and user management API', () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');
     const claim = await (await createClaim(token)).json<Claim>();
-    const review = await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountYuan: 49 });
+    const review = await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountCents: 4900 });
     expect(review.status).toBe(200);
 
     const response = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
@@ -225,22 +231,65 @@ describe('admin reporting and user management API', () => {
     const dashboard = await response.json<Dashboard>();
 
     expect(dashboard).toMatchObject({
-      confirmedRevenueYuan: 49,
+      confirmedRevenueCents: 4900,
       pendingOrderCount: 0,
       userCount: 2
     });
-    expect(dashboard.monthRevenueYuan).toBe(49);
-    expect(dashboard.todayRevenueYuan).toBe(49);
-    expect(dashboard.pendingAmountYuan).toBe(0);
+    expect(dashboard.monthRevenueCents).toBe(4900);
+    expect(dashboard.todayRevenueCents).toBe(4900);
+    expect(dashboard.pendingAmountCents).toBe(0);
     expect(dashboard.paidUserCount).toBe(1);
     expect(dashboard.repeatBuyerCount).toBe(0);
     expect(dashboard.newUserCount).toBeGreaterThanOrEqual(1);
-    expect(dashboard.byProduct.bundle).toBe(49);
+    expect(dashboard.byProduct.bundle).toBe(4900);
     expect(dashboard.byProduct.super).toBe(0);
     expect(dashboard.byProduct.anbu).toBe(0);
-    expect(dashboard.byCategory.courses).toBe(49);
+    expect(dashboard.byCategory.courses).toBe(4900);
     expect(dashboard.series).toHaveLength(30);
-    expect(dashboard.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(49);
+    expect(dashboard.series.reduce((sum, point) => sum + point.cents, 0)).toBe(4900);
+  });
+
+  it('reports exact cents and includes membership products in every revenue breakdown', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const firstUser = await registerUser('alice');
+    const discountedCourse = await (await createClaim(firstUser.token, claimForm({ productId: 'super' }))).json<Claim>();
+    const courseReview = await reviewClaim(adminToken, discountedCourse.orderNo, {
+      decision: 'approve',
+      actualAmountCents: 2320
+    });
+    expect(courseReview.status).toBe(200);
+
+    const secondUser = await registerUser('bob');
+    const membership = await (await createClaim(secondUser.token, claimForm({ productId: 'vip_monthly' }))).json<Claim>();
+    const membershipReview = await reviewClaim(adminToken, membership.orderNo, {
+      decision: 'approve',
+      actualAmountCents: 990
+    });
+    expect(membershipReview.status).toBe(200);
+
+    const dashboardResponse = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
+    expect(dashboardResponse.status).toBe(200);
+    const dashboard = await dashboardResponse.json<Dashboard>();
+    expect(dashboard.confirmedRevenueCents).toBe(3310);
+    expect(dashboard.monthRevenueCents).toBe(3310);
+    expect(dashboard.todayRevenueCents).toBe(3310);
+    expect(dashboard.totalCents).toBe(3310);
+    expect(dashboard.pendingAmountCents).toBe(0);
+    expect(dashboard.byProduct.super).toBe(2320);
+    expect(dashboard.byProduct.vip_monthly).toBe(990);
+    expect(dashboard.byCategory.courses).toBe(2320);
+    expect(dashboard.byCategory.memberships).toBe(990);
+    expect(dashboard.series.reduce((sum, point) => sum + point.cents, 0)).toBe(3310);
+
+    const revenueResponse = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
+    expect(revenueResponse.status).toBe(200);
+    const revenue = await revenueResponse.json<Revenue>();
+    expect(revenue.totalCents).toBe(3310);
+    expect(revenue.byProduct.super).toBe(2320);
+    expect(revenue.byProduct.vip_monthly).toBe(990);
+    expect(revenue.byCategory.courses).toBe(2320);
+    expect(revenue.byCategory.memberships).toBe(990);
+    expect(revenue.series.reduce((sum, point) => sum + point.cents, 0)).toBe(3310);
   });
 
   it('reports revenue by product and category without double-counting bundle components', async () => {
@@ -255,12 +304,12 @@ describe('admin reporting and user management API', () => {
 
     expect(report.range).toBe('30d');
     expect(report.seriesDays).toBe(30);
-    expect(report.totalYuan).toBe(49);
-    expect(report.byProduct.bundle).toBe(49);
+    expect(report.totalCents).toBe(4900);
+    expect(report.byProduct.bundle).toBe(4900);
     expect(report.byProduct.super).toBe(0);
     expect(report.byProduct.anbu).toBe(0);
-    expect(report.byCategory.courses).toBe(49);
-    expect(report.series.reduce((sum, point) => sum + point.yuan, 0)).toBe(report.totalYuan);
+    expect(report.byCategory.courses).toBe(4900);
+    expect(report.series.reduce((sum, point) => sum + point.cents, 0)).toBe(report.totalCents);
   });
 
   it('buckets revenue by the server reviewed_at time instead of user-paid time', async () => {
@@ -275,8 +324,8 @@ describe('admin reporting and user management API', () => {
     const recent = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
     expect(recent.status).toBe(200);
     const recentBody = await recent.json<Revenue>();
-    expect(recentBody.totalYuan).toBe(49);
-    expect(recentBody.byProduct.bundle).toBe(49);
+    expect(recentBody.totalCents).toBe(4900);
+    expect(recentBody.byProduct.bundle).toBe(4900);
 
     // Moving the server confirmation time outside the window moves the revenue.
     const oldReviewedAt = Date.now() - 45 * 24 * 60 * 60 * 1000;
@@ -287,15 +336,15 @@ describe('admin reporting and user management API', () => {
     const shifted = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
     expect(shifted.status).toBe(200);
     const shiftedBody = await shifted.json<Revenue>();
-    expect(shiftedBody.totalYuan).toBe(0);
+    expect(shiftedBody.totalCents).toBe(0);
     expect(shiftedBody.byProduct.bundle).toBe(0);
 
     const allTime = await app.request('/api/v1/admin/revenue?range=all', { headers: authHeaders(adminToken) }, env);
     expect(allTime.status).toBe(200);
     const allTimeBody = await allTime.json<Revenue>();
     expect(allTimeBody.range).toBe('all');
-    expect(allTimeBody.totalYuan).toBe(49);
-    expect(allTimeBody.byProduct.bundle).toBe(49);
+    expect(allTimeBody.totalCents).toBe(4900);
+    expect(allTimeBody.byProduct.bundle).toBe(4900);
   });
 
   it('rejects an unknown revenue range', async () => {
@@ -312,9 +361,9 @@ describe('admin reporting and user management API', () => {
     expect(response.status).toBe(200);
     const dashboard = await response.json<Dashboard>();
 
-    expect(dashboard.confirmedRevenueYuan).toBe(0);
+    expect(dashboard.confirmedRevenueCents).toBe(0);
     expect(dashboard.pendingOrderCount).toBe(1);
-    expect(dashboard.pendingAmountYuan).toBe(49);
+    expect(dashboard.pendingAmountCents).toBe(4900);
   });
 
   it('never counts rejected claims as revenue', async () => {
@@ -325,24 +374,24 @@ describe('admin reporting and user management API', () => {
 
     const dashboard = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
     const dashboardBody = await dashboard.json<Dashboard>();
-    expect(dashboardBody.confirmedRevenueYuan).toBe(0);
+    expect(dashboardBody.confirmedRevenueCents).toBe(0);
     expect(dashboardBody.pendingOrderCount).toBe(0);
 
     const revenue = await app.request('/api/v1/admin/revenue?range=all', { headers: authHeaders(adminToken) }, env);
     const report = await revenue.json<Revenue>();
-    expect(report.totalYuan).toBe(0);
+    expect(report.totalCents).toBe(0);
   });
 
   it('replaces list amounts with the reviewed actual amount', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');
     const claim = await (await createClaim(token)).json<Claim>();
-    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountYuan: 60 });
+    await reviewClaim(adminToken, claim.orderNo, { decision: 'approve', actualAmountCents: 6000 });
 
     const dashboard = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
     const dashboardBody = await dashboard.json<Dashboard>();
-    expect(dashboardBody.confirmedRevenueYuan).toBe(60);
-    expect(dashboardBody.byProduct.bundle).toBe(60);
+    expect(dashboardBody.confirmedRevenueCents).toBe(6000);
+    expect(dashboardBody.byProduct.bundle).toBe(6000);
   });
 
   it('corrects an approved order amount, paid time, and note with an audited before/after', async () => {
@@ -398,9 +447,9 @@ describe('admin reporting and user management API', () => {
 
     const dashboard = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
     const dashboardBody = await dashboard.json<Dashboard>();
-    expect(dashboardBody.confirmedRevenueYuan).toBe(60);
-    expect(dashboardBody.monthRevenueYuan).toBe(60);
-    expect(dashboardBody.todayRevenueYuan).toBe(60);
+    expect(dashboardBody.confirmedRevenueCents).toBe(6000);
+    expect(dashboardBody.monthRevenueCents).toBe(6000);
+    expect(dashboardBody.todayRevenueCents).toBe(6000);
   });
 
   it('only allows corrections on approved orders', async () => {

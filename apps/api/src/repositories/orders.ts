@@ -50,6 +50,12 @@ export interface InsertPaymentClaimInput {
   updatedAt: number;
 }
 
+export interface ExpectedMembershipState {
+  userId: string;
+  tier: 'vip' | 'svip';
+  activeAfter: number;
+}
+
 export interface UpdatePaymentClaimReviewInput {
   status: 'approved' | 'rejected';
   actualAmountYuan: number | null;
@@ -59,6 +65,8 @@ export interface UpdatePaymentClaimReviewInput {
   reviewedBy: string;
   reviewedAt: number;
   updatedAt: number;
+  expectedStatus?: PaymentClaimStatus | undefined;
+  expectedMembership?: ExpectedMembershipState | undefined;
 }
 
 export interface UpdatePaymentClaimCorrectionInput {
@@ -185,6 +193,37 @@ export function buildUpdatePaymentClaimReviewStatement(
   orderNo: string,
   input: UpdatePaymentClaimReviewInput
 ): D1PreparedStatement {
+  const conditions = ['order_no = ?'];
+  const bindings: Array<string | number | null> = [
+    input.actualAmountYuan,
+    input.actualAmountCents,
+    input.status,
+    input.rejectionReason,
+    input.note,
+    input.reviewedBy,
+    input.reviewedAt,
+    input.updatedAt,
+    orderNo
+  ];
+
+  if (input.expectedStatus) {
+    conditions.push('status = ?');
+    bindings.push(input.expectedStatus);
+  }
+  if (input.expectedMembership) {
+    conditions.push(
+      `EXISTS (
+        SELECT 1 FROM users
+        WHERE id = ? AND membership_tier = ? AND membership_expires_at > ?
+      )`
+    );
+    bindings.push(
+      input.expectedMembership.userId,
+      input.expectedMembership.tier,
+      input.expectedMembership.activeAfter
+    );
+  }
+
   return db
     .prepare(
       `UPDATE payment_claims
@@ -196,19 +235,9 @@ export function buildUpdatePaymentClaimReviewStatement(
            reviewed_by = ?,
            reviewed_at = ?,
            updated_at = ?
-       WHERE order_no = ?`
+       WHERE ${conditions.join(' AND ')}`
     )
-    .bind(
-      input.actualAmountYuan,
-      input.actualAmountCents,
-      input.status,
-      input.rejectionReason,
-      input.note,
-      input.reviewedBy,
-      input.reviewedAt,
-      input.updatedAt,
-      orderNo
-    );
+    .bind(...bindings);
 }
 
 export async function updatePaymentClaimReview(
@@ -269,16 +298,25 @@ export interface ApprovedPaymentClaimRow {
   id: string;
   user_id: string;
   product_id: string;
-  list_amount_yuan: number;
-  actual_amount_yuan: number | null;
-  confirmed_amount_yuan: number;
+  list_amount_cents: number;
+  actual_amount_cents: number | null;
+  confirmed_amount_cents: number;
   confirmed_at: number;
   category_id: string;
 }
 
 export interface PendingPaymentClaimSummary {
   count: number;
-  totalYuan: number;
+  totalCents: number;
+}
+
+export async function listProductsForRevenue(
+  db: D1Database
+): Promise<Array<{ id: string; title: string }>> {
+  const result = await db
+    .prepare('SELECT id, title FROM products ORDER BY sort_order, id')
+    .all<{ id: string; title: string }>();
+  return result.results ?? [];
 }
 
 export async function listApprovedPaymentClaims(
@@ -286,8 +324,27 @@ export async function listApprovedPaymentClaims(
 ): Promise<ApprovedPaymentClaimRow[]> {
   const result = await db
     .prepare(
-      `SELECT pc.id, pc.user_id, pc.product_id, pc.list_amount_yuan, pc.actual_amount_yuan,
-              COALESCE(pc.actual_amount_yuan, pc.list_amount_yuan) AS confirmed_amount_yuan,
+      `SELECT pc.id, pc.user_id, pc.product_id,
+              CASE
+                WHEN pc.list_amount_cents > 0 THEN pc.list_amount_cents
+                ELSE pc.list_amount_yuan * 100
+              END AS list_amount_cents,
+              CASE
+                WHEN pc.actual_amount_cents IS NOT NULL THEN pc.actual_amount_cents
+                WHEN pc.actual_amount_yuan IS NOT NULL THEN pc.actual_amount_yuan * 100
+                ELSE NULL
+              END AS actual_amount_cents,
+              COALESCE(
+                CASE
+                  WHEN pc.actual_amount_cents IS NOT NULL THEN pc.actual_amount_cents
+                  WHEN pc.actual_amount_yuan IS NOT NULL THEN pc.actual_amount_yuan * 100
+                  ELSE NULL
+                END,
+                CASE
+                  WHEN pc.list_amount_cents > 0 THEN pc.list_amount_cents
+                  ELSE pc.list_amount_yuan * 100
+                END
+              ) AS confirmed_amount_cents,
               COALESCE(pc.reviewed_at, pc.created_at) AS confirmed_at,
               p.category_id
        FROM payment_claims pc
@@ -304,12 +361,17 @@ export async function getPendingPaymentClaimSummary(
 ): Promise<PendingPaymentClaimSummary> {
   const row = await db
     .prepare(
-      `SELECT COUNT(*) AS count, COALESCE(SUM(list_amount_yuan), 0) AS total
+      `SELECT COUNT(*) AS count,
+              COALESCE(SUM(
+                CASE
+                  WHEN list_amount_cents > 0 THEN list_amount_cents
+                  ELSE list_amount_yuan * 100
+                END
+              ), 0) AS total
        FROM payment_claims
        WHERE status = 'pending'`
     )
     .first<{ count: number; total: number }>();
 
-  return { count: row?.count ?? 0, totalYuan: row?.total ?? 0 };
+  return { count: row?.count ?? 0, totalCents: row?.total ?? 0 };
 }
-

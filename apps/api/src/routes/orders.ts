@@ -5,6 +5,7 @@ import { bearerAuth } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
 import {
   createPaymentClaim,
+  getProductQuote,
   listMyPaymentClaims,
   toPaymentClaimPayload
 } from '../services/orders';
@@ -55,6 +56,15 @@ ordersRoutes.post('/', bearerAuth, async (c) => {
   });
 
   return c.json(toPaymentClaimPayload(claim), 201);
+});
+
+ordersRoutes.get('/quote', bearerAuth, async (c) => {
+  const productId = c.req.query('productId');
+  if (!productId) {
+    throw new ApiError('invalid_product', 'productId is required', 400);
+  }
+
+  return c.json(await getProductQuote(c.env, c.get('userId'), productId));
 });
 
 ordersRoutes.get('/mine', bearerAuth, async (c) => {

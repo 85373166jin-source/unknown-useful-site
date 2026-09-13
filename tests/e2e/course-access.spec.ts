@@ -63,7 +63,7 @@ test('an approved bundle payment grants super and anbu entitlements', async ({ p
     `http://127.0.0.1:8787/api/v1/admin/orders/${orderNo}/review`,
     {
       headers: { Authorization: `Bearer ${admin.token}` },
-      data: { decision: 'approve', actualAmountYuan: 49 }
+      data: { decision: 'approve', actualAmountCents: 4900 }
     }
   );
   expect(review.status()).toBe(200);

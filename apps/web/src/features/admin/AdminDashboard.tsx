@@ -1,32 +1,47 @@
 import { useEffect, useState } from 'react';
+import { centsToYuanString } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
 interface RevenuePoint {
   date: string;
-  yuan: number;
+  cents?: number;
+  yuan?: number;
 }
 
 interface DashboardReport {
-  confirmedRevenueYuan: number;
-  monthRevenueYuan: number;
-  todayRevenueYuan: number;
-  pendingAmountYuan: number;
+  confirmedRevenueCents?: number;
+  monthRevenueCents?: number;
+  todayRevenueCents?: number;
+  pendingAmountCents?: number;
+  confirmedRevenueYuan?: number;
+  monthRevenueYuan?: number;
+  todayRevenueYuan?: number;
+  pendingAmountYuan?: number;
   pendingOrderCount: number;
   userCount: number;
   newUserCount: number;
   paidUserCount: number;
   repeatBuyerCount: number;
-  totalYuan: number;
+  totalCents?: number;
+  totalYuan?: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
   series: RevenuePoint[];
 }
 
-function formatYuan(value: number | undefined): string {
+function centsFromLegacyYuan(value: number | undefined): number | undefined {
+  return value === undefined ? undefined : Math.round(value * 100);
+}
+
+function pointCents(point: RevenuePoint): number {
+  return point.cents ?? centsFromLegacyYuan(point.yuan) ?? 0;
+}
+
+function formatCents(value: number | undefined): string {
   if (value === undefined) {
     return '—';
   }
-  return `${value.toLocaleString('zh-CN')} 元`;
+  return `${centsToYuanString(value)} 元`;
 }
 
 function formatCount(value: number | undefined): string {
@@ -41,11 +56,11 @@ function shortDateLabel(date: string): string {
   return `${month ?? ''}/${day ?? ''}`;
 }
 
-function maxSeriesYuan(series: RevenuePoint[]): number {
+function maxSeriesCents(series: RevenuePoint[]): number {
   if (series.length === 0) {
     return 1;
   }
-  return Math.max(...series.map((point) => point.yuan), 1);
+  return Math.max(...series.map(pointCents), 1);
 }
 
 export function AdminDashboard() {
@@ -72,7 +87,12 @@ export function AdminDashboard() {
     };
   }, []);
 
-  const seriesMax = maxSeriesYuan(report?.series ?? []);
+  const confirmedRevenueCents =
+    report?.confirmedRevenueCents ?? centsFromLegacyYuan(report?.confirmedRevenueYuan);
+  const monthRevenueCents = report?.monthRevenueCents ?? centsFromLegacyYuan(report?.monthRevenueYuan);
+  const todayRevenueCents = report?.todayRevenueCents ?? centsFromLegacyYuan(report?.todayRevenueYuan);
+  const pendingAmountCents = report?.pendingAmountCents ?? centsFromLegacyYuan(report?.pendingAmountYuan);
+  const seriesMax = maxSeriesCents(report?.series ?? []);
 
   return (
     <section className="admin-page">
@@ -89,15 +109,15 @@ export function AdminDashboard() {
       <div className="admin-metrics">
         <article className="admin-metric">
           <span className="admin-metric__label">网站已确认收入</span>
-          <strong className="admin-metric__value">{formatYuan(report?.confirmedRevenueYuan)}</strong>
+          <strong className="admin-metric__value">{formatCents(confirmedRevenueCents)}</strong>
         </article>
         <article className="admin-metric">
           <span className="admin-metric__label">本月收入</span>
-          <strong className="admin-metric__value">{formatYuan(report?.monthRevenueYuan)}</strong>
+          <strong className="admin-metric__value">{formatCents(monthRevenueCents)}</strong>
         </article>
         <article className="admin-metric">
           <span className="admin-metric__label">今日收入</span>
-          <strong className="admin-metric__value">{formatYuan(report?.todayRevenueYuan)}</strong>
+          <strong className="admin-metric__value">{formatCents(todayRevenueCents)}</strong>
         </article>
         <article className="admin-metric">
           <span className="admin-metric__label">待审核订单</span>
@@ -105,7 +125,7 @@ export function AdminDashboard() {
         </article>
         <article className="admin-metric">
           <span className="admin-metric__label">待审核金额</span>
-          <strong className="admin-metric__value">{formatYuan(report?.pendingAmountYuan)}</strong>
+          <strong className="admin-metric__value">{formatCents(pendingAmountCents)}</strong>
         </article>
         <article className="admin-metric">
           <span className="admin-metric__label">用户总数</span>
@@ -128,16 +148,19 @@ export function AdminDashboard() {
       <div className="admin-panel">
         <h2>近 30 天收入趋势</h2>
         <div className="admin-bars" aria-label="近 30 天收入趋势">
-          {(report?.series ?? []).map((point) => (
+          {(report?.series ?? []).map((point) => {
+            const cents = pointCents(point);
+            return (
             <div className="admin-bar" key={point.date}>
-              <span className="admin-bar__value">{point.yuan}</span>
+              <span className="admin-bar__value">{centsToYuanString(cents)}</span>
               <span
                 className="admin-bar__fill"
-                style={{ height: `${Math.max((point.yuan / seriesMax) * 100, point.yuan > 0 ? 4 : 0)}%` }}
+                style={{ height: `${Math.max((cents / seriesMax) * 100, cents > 0 ? 4 : 0)}%` }}
               />
               <span className="admin-bar__label">{shortDateLabel(point.date)}</span>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </section>

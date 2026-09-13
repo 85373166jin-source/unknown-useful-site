@@ -13,9 +13,9 @@ interface TestOrder {
   id: string;
   orderNo: string;
   userId: string;
-  productId: 'super' | 'anbu' | 'bundle';
-  listAmountYuan: number;
-  actualAmountYuan: number | null;
+  productId: 'super' | 'anbu' | 'bundle' | 'vip_monthly';
+  listAmountCents: number;
+  actualAmountCents: number | null;
   paidAt: number;
   contactText: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -31,12 +31,12 @@ const order: TestOrder = {
   id: '11111111-1111-1111-1111-111111111111',
   orderNo: 'HY-20260913-ABC1',
   userId: 'user-1',
-  productId: 'bundle' as const,
-  listAmountYuan: 49,
-  actualAmountYuan: null,
+  productId: 'bundle',
+  listAmountCents: 4900,
+  actualAmountCents: null,
   paidAt: 1_760_000_000_000,
   contactText: 'alice@example.com',
-  status: 'pending' as const,
+  status: 'pending',
   rejectionReason: null,
   adminNote: null,
   reviewedBy: null,
@@ -92,18 +92,18 @@ describe('AdminOrders', () => {
 
     expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(`/admin/orders/${order.orderNo}/review`, {
       method: 'PATCH',
-      body: { decision: 'approve', actualAmountYuan: 50 }
+      body: { decision: 'approve', actualAmountCents: 5000 }
     });
     expect(vi.mocked(apiFetch)).not.toHaveBeenCalledWith(`/admin/orders/${order.id}/review`, expect.anything());
   });
 
-  it('corrects an approved order through the review endpoint', async () => {
+  it('corrects an approved order through the review endpoint without losing cents', async () => {
     orders = [
       {
         ...order,
-        actualAmountYuan: 49,
+        actualAmountCents: 4900,
         adminNote: '首款',
-        status: 'approved' as const,
+        status: 'approved',
         reviewedAt: 1_760_000_000_000,
         reviewedBy: 'admin-1'
       }
@@ -113,7 +113,7 @@ describe('AdminOrders', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '查看审核' }));
     fireEvent.change(await screen.findByLabelText('实收金额（元）'), {
-      target: { value: '60' }
+      target: { value: '60.01' }
     });
     fireEvent.change(await screen.findByLabelText('付款时间'), {
       target: { value: '2026-09-13T10:00' }
@@ -134,10 +134,63 @@ describe('AdminOrders', () => {
       method: 'PATCH',
       body: {
         decision: 'correct',
-        actualAmountYuan: 60,
+        actualAmountCents: 6001,
         paidAt: new Date('2026-09-13T10:00').toISOString(),
         note: '客户补款'
       }
+    });
+  });
+
+  it('approves an unchanged 990-cent membership claim with exact cents and a product name', async () => {
+    orders = [
+      {
+        ...order,
+        productId: 'vip_monthly',
+        listAmountCents: 990,
+        actualAmountCents: 990
+      }
+    ];
+
+    render(<AdminOrders />, { wrapper: TestProviders });
+
+    expect(await screen.findByText('VIP 会员')).toBeInTheDocument();
+    expect(screen.queryByText('vip_monthly')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('9.90 元')).not.toHaveLength(0);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看审核' }));
+    expect(screen.getByLabelText('实收金额（元）')).toHaveValue(9.9);
+    fireEvent.click(screen.getByRole('button', { name: '通过并确认收入' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(`/admin/orders/${order.orderNo}/review`, {
+        method: 'PATCH',
+        body: { decision: 'approve', actualAmountCents: 990 }
+      });
+    });
+  });
+
+  it('approves a 2320-cent discounted course claim without rounding', async () => {
+    orders = [
+      {
+        ...order,
+        productId: 'super',
+        listAmountCents: 2900,
+        actualAmountCents: 2320
+      }
+    ];
+
+    render(<AdminOrders />, { wrapper: TestProviders });
+
+    expect(await screen.findAllByText('23.20 元')).not.toHaveLength(0);
+    fireEvent.click(await screen.findByRole('button', { name: '查看审核' }));
+    expect(screen.getByLabelText('实收金额（元）')).toHaveValue(23.2);
+    fireEvent.click(screen.getByRole('button', { name: '通过并确认收入' }));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(`/admin/orders/${order.orderNo}/review`, {
+        method: 'PATCH',
+        body: { decision: 'approve', actualAmountCents: 2320 }
+      });
     });
   });
 

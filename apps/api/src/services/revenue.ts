@@ -4,6 +4,7 @@ import { ApiError } from '../middleware/error';
 import {
   getPendingPaymentClaimSummary,
   listApprovedPaymentClaims,
+  listProductsForRevenue,
   type ApprovedPaymentClaimRow
 } from '../repositories/orders';
 import { countUsers, countUsersCreatedSince } from '../repositories/users';
@@ -14,10 +15,12 @@ export type RevenueRange = '7d' | '30d' | '90d' | 'all';
 
 export interface RevenuePoint {
   date: string;
+  cents: number;
   yuan: number;
 }
 
 export interface RevenueTotals {
+  totalCents: number;
   totalYuan: number;
   byProduct: Record<string, number>;
   byCategory: Record<string, number>;
@@ -30,10 +33,14 @@ export interface RevenueReport extends RevenueTotals {
 }
 
 export interface DashboardReport extends RevenueTotals {
+  confirmedRevenueCents: number;
   confirmedRevenueYuan: number;
   seriesDays: number;
+  monthRevenueCents: number;
   monthRevenueYuan: number;
+  todayRevenueCents: number;
   todayRevenueYuan: number;
+  pendingAmountCents: number;
   pendingAmountYuan: number;
   pendingOrderCount: number;
   userCount: number;
@@ -42,8 +49,14 @@ export interface DashboardReport extends RevenueTotals {
   repeatBuyerCount: number;
 }
 
-function emptyProductMap(): Record<string, number> {
-  return Object.fromEntries(Object.keys(CATALOG.products).map((id) => [id, 0]));
+function yuan(cents: number): number {
+  return cents / 100;
+}
+
+function emptyProductMap(productIds: string[]): Record<string, number> {
+  return Object.fromEntries(
+    Array.from(new Set([...Object.keys(CATALOG.products), ...productIds])).map((id) => [id, 0])
+  );
 }
 
 function emptyCategoryMap(): Record<string, number> {
@@ -51,13 +64,16 @@ function emptyCategoryMap(): Record<string, number> {
 }
 
 function sumConfirmedAmounts(claims: ApprovedPaymentClaimRow[]): number {
-  return claims.reduce((sum, claim) => sum + claim.confirmed_amount_yuan, 0);
+  return claims.reduce((sum, claim) => sum + claim.confirmed_amount_cents, 0);
 }
 
-function byProduct(claims: ApprovedPaymentClaimRow[]): Record<string, number> {
-  const totals = emptyProductMap();
+function byProduct(
+  claims: ApprovedPaymentClaimRow[],
+  productIds: string[]
+): Record<string, number> {
+  const totals = emptyProductMap(productIds);
   for (const claim of claims) {
-    totals[claim.product_id] = (totals[claim.product_id] ?? 0) + claim.confirmed_amount_yuan;
+    totals[claim.product_id] = (totals[claim.product_id] ?? 0) + claim.confirmed_amount_cents;
   }
   return totals;
 }
@@ -65,7 +81,7 @@ function byProduct(claims: ApprovedPaymentClaimRow[]): Record<string, number> {
 function byCategory(claims: ApprovedPaymentClaimRow[]): Record<string, number> {
   const totals = emptyCategoryMap();
   for (const claim of claims) {
-    totals[claim.category_id] = (totals[claim.category_id] ?? 0) + claim.confirmed_amount_yuan;
+    totals[claim.category_id] = (totals[claim.category_id] ?? 0) + claim.confirmed_amount_cents;
   }
   return totals;
 }
@@ -99,21 +115,29 @@ function rangeWindowEnd(now: number): number {
   return startOfUtcDay(now) + MS_PER_DAY;
 }
 
-function trailingDaysSeries(claims: ApprovedPaymentClaimRow[], now: number, days: number): RevenuePoint[] {
+function trailingDaysSeries(
+  claims: ApprovedPaymentClaimRow[],
+  now: number,
+  days: number
+): RevenuePoint[] {
   const todayStart = startOfUtcDay(now);
-  const dayStarts = Array.from({ length: days }, (_, index) => todayStart - (days - 1 - index) * MS_PER_DAY);
+  const dayStarts = Array.from(
+    { length: days },
+    (_, index) => todayStart - (days - 1 - index) * MS_PER_DAY
+  );
   const totals = new Map(dayStarts.map((dayStart) => [utcDateKey(dayStart), 0]));
 
   for (const claim of claims) {
     const key = utcDateKey(claim.confirmed_at);
     if (totals.has(key)) {
-      totals.set(key, (totals.get(key) ?? 0) + claim.confirmed_amount_yuan);
+      totals.set(key, (totals.get(key) ?? 0) + claim.confirmed_amount_cents);
     }
   }
 
   return dayStarts.map((dayStart) => {
     const key = utcDateKey(dayStart);
-    return { date: key, yuan: totals.get(key) ?? 0 };
+    const cents = totals.get(key) ?? 0;
+    return { date: key, cents, yuan: yuan(cents) };
   });
 }
 
@@ -127,7 +151,11 @@ function parseRevenueRange(value: string | undefined): RevenueRange {
   throw new ApiError('invalid_request', 'Range must be one of 7d, 30d, 90d, or all', 400);
 }
 
-function filterByRange(claims: ApprovedPaymentClaimRow[], now: number, range: RevenueRange): ApprovedPaymentClaimRow[] {
+function filterByRange(
+  claims: ApprovedPaymentClaimRow[],
+  now: number,
+  range: RevenueRange
+): ApprovedPaymentClaimRow[] {
   if (range === 'all') {
     return claims;
   }
@@ -138,18 +166,29 @@ function filterByRange(claims: ApprovedPaymentClaimRow[], now: number, range: Re
   return claims.filter((claim) => claim.confirmed_at >= start && claim.confirmed_at < end);
 }
 
-export async function getRevenueReport(env: Env, rangeValue: string | undefined): Promise<RevenueReport> {
+export async function getRevenueReport(
+  env: Env,
+  rangeValue: string | undefined
+): Promise<RevenueReport> {
   const range = parseRevenueRange(rangeValue);
   const now = Date.now();
-  const claims = await listApprovedPaymentClaims(env.DB);
+  const [claims, products] = await Promise.all([
+    listApprovedPaymentClaims(env.DB),
+    listProductsForRevenue(env.DB)
+  ]);
   const inRange = filterByRange(claims, now, range);
   const seriesDays = rangeDays(range);
+  const totalCents = sumConfirmedAmounts(inRange);
 
   return {
     range,
     seriesDays,
-    totalYuan: sumConfirmedAmounts(inRange),
-    byProduct: byProduct(inRange),
+    totalCents,
+    totalYuan: yuan(totalCents),
+    byProduct: byProduct(
+      inRange,
+      products.map((product) => product.id)
+    ),
     byCategory: byCategory(inRange),
     series: trailingDaysSeries(inRange, now, seriesDays)
   };
@@ -157,10 +196,13 @@ export async function getRevenueReport(env: Env, rangeValue: string | undefined)
 
 export async function getDashboard(env: Env): Promise<DashboardReport> {
   const now = Date.now();
-  const claims = await listApprovedPaymentClaims(env.DB);
-  const pending = await getPendingPaymentClaimSummary(env.DB);
-  const userCount = await countUsers(env.DB);
-  const newUserCount = await countUsersCreatedSince(env.DB, startOfUtcMonth(now));
+  const [claims, pending, userCount, newUserCount, products] = await Promise.all([
+    listApprovedPaymentClaims(env.DB),
+    getPendingPaymentClaimSummary(env.DB),
+    countUsers(env.DB),
+    countUsersCreatedSince(env.DB, startOfUtcMonth(now)),
+    listProductsForRevenue(env.DB)
+  ]);
 
   const orderCountsByUser = new Map<string, number>();
   for (const claim of claims) {
@@ -171,20 +213,31 @@ export async function getDashboard(env: Env): Promise<DashboardReport> {
   const todayStart = startOfUtcDay(now);
   const monthClaims = claims.filter((claim) => claim.confirmed_at >= monthStart);
   const todayClaims = claims.filter((claim) => claim.confirmed_at >= todayStart);
+  const totalCents = sumConfirmedAmounts(claims);
+  const monthRevenueCents = sumConfirmedAmounts(monthClaims);
+  const todayRevenueCents = sumConfirmedAmounts(todayClaims);
 
   return {
-    confirmedRevenueYuan: sumConfirmedAmounts(claims),
+    confirmedRevenueCents: totalCents,
+    confirmedRevenueYuan: yuan(totalCents),
     seriesDays: 30,
-    totalYuan: sumConfirmedAmounts(claims),
-    monthRevenueYuan: sumConfirmedAmounts(monthClaims),
-    todayRevenueYuan: sumConfirmedAmounts(todayClaims),
-    pendingAmountYuan: pending.totalYuan,
+    totalCents,
+    totalYuan: yuan(totalCents),
+    monthRevenueCents,
+    monthRevenueYuan: yuan(monthRevenueCents),
+    todayRevenueCents,
+    todayRevenueYuan: yuan(todayRevenueCents),
+    pendingAmountCents: pending.totalCents,
+    pendingAmountYuan: yuan(pending.totalCents),
     pendingOrderCount: pending.count,
     userCount,
     newUserCount,
     paidUserCount: orderCountsByUser.size,
     repeatBuyerCount: Array.from(orderCountsByUser.values()).filter((count) => count >= 2).length,
-    byProduct: byProduct(claims),
+    byProduct: byProduct(
+      claims,
+      products.map((product) => product.id)
+    ),
     byCategory: byCategory(claims),
     series: trailingDaysSeries(claims, now, 30)
   };

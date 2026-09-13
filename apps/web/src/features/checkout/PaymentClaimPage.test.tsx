@@ -8,8 +8,61 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const QUOTES: Record<string, { listAmountCents: number; actualAmountCents: number }> = {
+  bundle: { listAmountCents: 4900, actualAmountCents: 4900 },
+  super: { listAmountCents: 2900, actualAmountCents: 2320 },
+  vip_monthly: { listAmountCents: 990, actualAmountCents: 990 },
+  svip_monthly: { listAmountCents: 1990, actualAmountCents: 1990 }
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function quoteFor(productId: string): Response {
+  const quote = QUOTES[productId] ?? QUOTES.bundle!;
+  return jsonResponse({ productId, title: productId, ...quote });
+}
+
+function installFetch(
+  postHandler?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response
+): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/orders/quote?')) {
+      const productId = new URL(url, 'http://localhost').searchParams.get('productId') ?? 'bundle';
+      return quoteFor(productId);
+    }
+    if (url === '/api/v1/orders') {
+      return postHandler ? await postHandler(input, init) : jsonResponse({ orderNo: 'HY-20260912-ABCD', status: 'pending' }, 201);
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function setScreenshot(): void {
+  const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
+  Object.defineProperty(screenshotInput, 'files', {
+    value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
+    configurable: true
+  });
+  fireEvent.change(screenshotInput);
+}
+
+function fillRequiredFields(): void {
+  fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
+  fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
+  setScreenshot();
+}
+
 describe('PaymentClaimPage', () => {
-  it('renders the payment form, selected product, and replaceable QR asset', () => {
+  it('renders the payment form, selected product, and replaceable QR asset', async () => {
+    installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=bundle']}>
         <PaymentClaimPage />
@@ -20,11 +73,12 @@ describe('PaymentClaimPage', () => {
     expect(screen.getByAltText('微信收款码')).toHaveAttribute('src', paymentQrUrls().wechat);
     expect(screen.getByAltText('支付宝收款码')).toHaveAttribute('src', paymentQrUrls().alipay);
     expect(screen.getByLabelText('产品')).toHaveValue('bundle');
-    expect(screen.getByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交付款申请' })).toBeInTheDocument();
   });
 
-  it('opens membership purchase links with the exact membership list price', () => {
+  it('opens membership purchase links with the server list price', async () => {
+    installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=vip_monthly']}>
         <PaymentClaimPage />
@@ -32,7 +86,7 @@ describe('PaymentClaimPage', () => {
     );
 
     expect(screen.getByLabelText('产品')).toHaveValue('vip_monthly');
-    expect(screen.getByText((_, element) => element?.textContent === '当前标价：9.90 元')).toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：9.90 元')).toBeInTheDocument();
   });
 
   it('resolves the fallback QR from the configured base path', () => {
@@ -40,7 +94,8 @@ describe('PaymentClaimPage', () => {
     expect(paymentQrFallback('payment-alipay.jpg', '/unknown-useful-site/')).toBe('/unknown-useful-site/payment-alipay.jpg');
   });
 
-  it('omits coming-soon products and falls back to a claimable product', () => {
+  it('omits coming-soon products and falls back to a claimable product', async () => {
+    installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=anbu']}>
         <PaymentClaimPage />
@@ -49,114 +104,112 @@ describe('PaymentClaimPage', () => {
 
     expect(screen.getByLabelText('产品')).toHaveValue('bundle');
     expect(screen.queryByRole('option', { name: /暗部课程/ })).not.toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
+  });
+
+  it('shows the exact server quote before the user pays', async () => {
+    const fetchMock = installFetch();
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=super']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
+    expect(screen.getByText('当前应付：23.20 元')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders/quote?productId=super', expect.anything());
+  });
+
+  it.each([
+    ['normal course', 'super', 2900, '29.00'],
+    ['VIP course', 'super', 2320, '23.20'],
+    ['SVIP course', 'super', 1450, '14.50'],
+    ['non-discountable membership', 'vip_monthly', 990, '9.90']
+  ])('renders the server quote for %s', async (_label, productId, actualAmountCents, expectedYuan) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/orders/quote?')) {
+        const listAmountCents = productId === 'vip_monthly' ? 990 : 2900;
+        return jsonResponse({ productId, title: productId, listAmountCents, actualAmountCents });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <TestProviders initialEntries={[`/payment-claim?productId=${productId}`]}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    expect(await screen.findByText(`当前应付：${expectedYuan} 元`)).toBeInTheDocument();
   });
 
   it('submits the selected product and screenshot, then shows the pending order number', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ orderNo: 'HY-20260912-ABCD', status: 'pending' }),
-        { status: 201, headers: { 'content-type': 'application/json' } }
-      )
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
+    const fetchMock = installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=super']}>
         <PaymentClaimPage />
       </TestProviders>
     );
-
-    fireEvent.change(screen.getByLabelText('产品'), { target: { value: 'super' } });
-    fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
-    fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
-    const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
-    Object.defineProperty(screenshotInput, 'files', {
-      value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
-      configurable: true
-    });
-    fireEvent.change(screenshotInput);
-    const form = screen.getByText('填写付款信息').closest('form')!;
-    fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(screen.getByText(/HY-20260912-ABCD/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '提交付款申请' })).toBeEnabled();
     });
+    fillRequiredFields();
+    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
+
+    await screen.findByText(/HY-20260912-ABCD/);
     expect(screen.getByText(/待审核/)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders', expect.objectContaining({ method: 'POST' }));
   });
 
-  it('displays the exact list and payable cents returned by the server', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          orderNo: 'HY-20260912-EFGH',
-          status: 'pending',
-          listAmountCents: 2900,
-          actualAmountCents: 2320
-        }),
-        { status: 201, headers: { 'content-type': 'application/json' } }
-      )
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('clears the old server quote when the selected product changes', async () => {
+    installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=super']}>
         <PaymentClaimPage />
       </TestProviders>
     );
-
-    fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
-    fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
-    const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
-    Object.defineProperty(screenshotInput, 'files', {
-      value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
-      configurable: true
-    });
-    fireEvent.change(screenshotInput);
-    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
-
-    expect(await screen.findByText(/HY-20260912-EFGH/)).toBeInTheDocument();
-    expect(screen.getByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
-    expect(screen.getByText('当前应付：23.20 元')).toBeInTheDocument();
-  });
-
-  it('clears server-returned amounts when the selected product changes', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          orderNo: 'HY-20260912-IJKL',
-          status: 'pending',
-          listAmountCents: 2900,
-          actualAmountCents: 2320
-        }),
-        { status: 201, headers: { 'content-type': 'application/json' } }
-      )
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(
-      <TestProviders initialEntries={['/payment-claim?productId=super']}>
-        <PaymentClaimPage />
-      </TestProviders>
-    );
-
-    fireEvent.change(screen.getByLabelText('付款时间'), { target: { value: '2026-09-12T12:00' } });
-    fireEvent.change(screen.getByLabelText('联系方式'), { target: { value: 'alice@example.com' } });
-    const screenshotInput = screen.getByLabelText('付款截图') as HTMLInputElement;
-    Object.defineProperty(screenshotInput, 'files', {
-      value: [new File([new Uint8Array([1, 2, 3])], 'payment.png', { type: 'image/png' })],
-      configurable: true
-    });
-    fireEvent.change(screenshotInput);
-    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
 
     expect(await screen.findByText('当前应付：23.20 元')).toBeInTheDocument();
-
     fireEvent.change(screen.getByLabelText('产品'), { target: { value: 'bundle' } });
 
     expect(screen.getByLabelText('产品')).toHaveValue('bundle');
-    expect(screen.getByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
-    expect(screen.queryByText('当前应付：23.20 元')).not.toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('当前应付：23.20 元')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('当前应付：49.00 元')).toBeInTheDocument();
+  });
+
+  it('disables product changes while a claim submission is in flight', async () => {
+    let resolvePost!: (response: Response) => void;
+    installFetch(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvePost = resolve;
+        })
+    );
+
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=super']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '提交付款申请' })).toBeEnabled();
+    });
+    fillRequiredFields();
+    fireEvent.submit(screen.getByText('填写付款信息').closest('form')!);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('产品')).toBeDisabled();
+    });
+
+    resolvePost(jsonResponse({ orderNo: 'HY-20260912-WXYZ', status: 'pending' }, 201));
+    await screen.findByText(/HY-20260912-WXYZ/);
+    expect(screen.getByLabelText('产品')).toBeEnabled();
   });
 });
-

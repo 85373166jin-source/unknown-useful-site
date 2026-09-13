@@ -31,7 +31,11 @@ describe('AdminApp', () => {
   });
 
   it('renders the admin dashboard shell', async () => {
-    render(<AdminApp />, { wrapper: TestProviders });
+    render(
+      <TestProviders initialUser={adminUser('owner')}>
+        <AdminApp />
+      </TestProviders>
+    );
 
     expect(await screen.findByText('网站已确认收入')).toBeInTheDocument();
     expect(screen.getByText('今日收入')).toBeInTheDocument();
@@ -50,15 +54,20 @@ describe('AdminApp', () => {
     expect(screen.getByRole('link', { name: '会员管理' })).toBeInTheDocument();
   });
 
-  it('hides and redirects away from membership management for non-owner admins', async () => {
+  it('hides all owner-only navigation and routes from non-owner admins', async () => {
     render(
-      <TestProviders initialUser={adminUser('admin')} initialEntries={['/memberships']}>
+      <TestProviders initialUser={adminUser('admin')} initialEntries={['/orders']}>
         <AdminApp />
       </TestProviders>
     );
 
-    expect(await screen.findByText('网站已确认收入')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '会员管理' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '会员管理' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '仪表盘' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '订单审核' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '用户管理' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '收入统计' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '审计记录' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '安全设置' })).not.toBeInTheDocument();
+    expect(screen.queryByText('网站已确认收入')).not.toBeInTheDocument();
   });
 });

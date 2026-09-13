@@ -15,13 +15,13 @@ interface AdminNavItem {
 }
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
-  { to: '/dashboard', label: '仪表盘' },
-  { to: '/orders', label: '订单审核' },
-  { to: '/users', label: '用户管理' },
+  { to: '/dashboard', label: '仪表盘', ownerOnly: true },
+  { to: '/orders', label: '订单审核', ownerOnly: true },
+  { to: '/users', label: '用户管理', ownerOnly: true },
   { to: '/memberships', label: '会员管理', ownerOnly: true },
-  { to: '/revenue', label: '收入统计' },
-  { to: '/audit', label: '审计记录' },
-  { to: '/settings', label: '安全设置' }
+  { to: '/revenue', label: '收入统计', ownerOnly: true },
+  { to: '/audit', label: '审计记录', ownerOnly: true },
+  { to: '/settings', label: '安全设置', ownerOnly: true }
 ];
 
 function AdminLayout({ isOwner }: { isOwner: boolean }) {
@@ -54,7 +54,7 @@ function AdminForbidden() {
   return (
     <section className="admin-forbidden">
       <h1>无权访问</h1>
-      <p>仅管理员可访问站长后台。</p>
+      <p>仅站长可访问站长后台。</p>
     </section>
   );
 }
@@ -81,11 +81,15 @@ export function AdminApp() {
     return <div className="admin-loading">加载中…</div>;
   }
 
-  if (user && user.role !== 'admin') {
+  if (!user) {
+    return <AdminLoginNotice />;
+  }
+
+  if (user.permissionRole !== 'owner') {
     return <AdminForbidden />;
   }
 
-  const isOwner = user?.permissionRole === 'owner';
+  const isOwner = true;
 
   return (
     <Routes>

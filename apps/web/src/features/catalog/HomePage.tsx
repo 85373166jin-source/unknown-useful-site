@@ -26,8 +26,9 @@ const RESOURCES: Resource[] = [
   {
     id: 'memberships',
     title: '平台会员权益',
-    description: '会员专属权益即将上线',
-    badge: '规划中'
+    description: 'VIP 与 SVIP 会员权益已上线',
+    badge: '已上线',
+    href: '/membership'
   }
 ];
 
