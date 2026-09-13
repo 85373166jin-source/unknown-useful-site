@@ -6,7 +6,6 @@ import { resetTestDatabase } from './helpers/test-db';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const HOUR_MS = 60 * 60 * 1000;
-const TEN_MINUTES_MS = 10 * 60 * 1000;
 
 type CommentStatus = 'pending' | 'public' | 'rejected' | 'author_only';
 
@@ -288,27 +287,78 @@ describe('comments API', () => {
     expect(authorBody.comments[3]?.status).toBe('author_only');
   });
 
-  it('resets the SVIP window after ten minutes and treats expired memberships as normal', async () => {
+  it('resets the SVIP quota at the next fixed ten-minute window and treats expired memberships as normal', async () => {
     const alice = await registerUser('alice');
     const now = Date.now();
     await setMembership(alice.userId, 'svip', now + 30 * 24 * HOUR_MS);
-    for (let index = 1; index <= 3; index += 1) {
-      await insertComment({
-        id: `old-${index}`,
-        userId: alice.userId,
-        status: 'public',
-        createdAt: now - TEN_MINUTES_MS - 1
-      });
-    }
+    const key = `comment:svip:${alice.userId}`;
+    await env.DB.prepare(
+      `INSERT INTO rate_limits (rate_key, window_start, count, expires_at) VALUES (?, ?, 3, ?)`
+    ).bind(key, 1, 1).run();
 
     const recent = await postComment(alice.token, 'new window');
     expect(recent.status).toBe(201);
     await expect(recent.json<CommentPayload>()).resolves.toMatchObject({ status: 'public' });
+    const quota = await env.DB.prepare(
+      'SELECT count FROM rate_limits WHERE rate_key = ?'
+    ).bind(key).first<{ count: number }>();
+    expect(quota?.count).toBe(1);
 
     await setMembership(alice.userId, 'svip', now - 1);
     const expired = await postComment(alice.token, 'expired membership');
     expect(expired.status).toBe(201);
     await expect(expired.json<CommentPayload>()).resolves.toMatchObject({ status: 'pending' });
+  });
+
+  it('does not release SVIP quota when a comment is deleted in the same window', async () => {
+    const alice = await registerUser('alice');
+    await setMembership(alice.userId, 'svip', Date.now() + 30 * 24 * HOUR_MS);
+
+    const created: CommentPayload[] = [];
+    for (let index = 1; index <= 3; index += 1) {
+      const response = await postComment(alice.token, `quota ${index}`);
+      expect(response.status).toBe(201);
+      created.push(await response.json<CommentPayload>());
+    }
+    expect(created.map((comment) => comment.status)).toEqual(['public', 'public', 'public']);
+
+    const deleted = await app.request(
+      `/api/v1/comments/${created[0]?.id}`,
+      { method: 'DELETE', headers: authHeaders(alice.token) },
+      env
+    );
+    expect(deleted.status).toBe(200);
+
+    const fourth = await postComment(alice.token, 'after delete');
+    expect(fourth.status).toBe(201);
+    await expect(fourth.json<CommentPayload>()).resolves.toMatchObject({ status: 'author_only' });
+
+    const quota = await env.DB.prepare(
+      'SELECT count FROM rate_limits WHERE rate_key = ?'
+    ).bind(`comment:svip:${alice.userId}`).first<{ count: number }>();
+    expect(quota?.count).toBe(4);
+  });
+
+  it('atomically consumes SVIP quota for concurrent-equivalent posts', async () => {
+    const alice = await registerUser('alice');
+    await setMembership(alice.userId, 'svip', Date.now() + 30 * 24 * HOUR_MS);
+
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, (_, index) => postComment(alice.token, `concurrent ${index + 1}`))
+    );
+    for (const response of responses) {
+      expect(response.status).toBe(201);
+    }
+    const comments = await Promise.all(
+      responses.map((response) => response.json<CommentPayload>())
+    );
+    expect(comments.filter((comment) => comment.status === 'public')).toHaveLength(3);
+    expect(comments.filter((comment) => comment.status === 'author_only')).toHaveLength(1);
+
+    const quota = await env.DB.prepare(
+      'SELECT count FROM rate_limits WHERE rate_key = ?'
+    ).bind(`comment:svip:${alice.userId}`).first<{ count: number }>();
+    expect(quota?.count).toBe(4);
   });
 
   it('rejects missing products, unauthenticated posts, and invalid comment bodies', async () => {

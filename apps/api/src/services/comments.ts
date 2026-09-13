@@ -10,8 +10,8 @@ import type {
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
 import {
-  countCommentsSince,
-  deleteCommentById,
+  buildDeleteCommentStatement,
+  buildUpdateCommentDecisionStatement,
   deleteExpiredAuthorOnlyComments,
   deleteExpiredRateLimits,
   findCommentById,
@@ -20,16 +20,19 @@ import {
   listCommentsForAdmin,
   listVisibleCommentsForProduct,
   productExists,
-  updateCommentDecision,
   type CommentWithAuthorRow
 } from '../repositories/comments';
 import { findUserById, type UserRow } from '../repositories/users';
-import { recordAudit } from './audit';
+import { buildAuditStatement } from './audit';
 import { effectiveMembership, membershipRemainingDays } from './membership';
+import { consumeRateLimit } from './rate-limit';
 
 export const SVIP_COMMENT_WINDOW_MS = 10 * 60 * 1000;
 export const AUTHOR_ONLY_VISIBLE_MS = 60 * 60 * 1000;
 export const SVIP_PUBLIC_COMMENT_LIMIT = 3;
+
+// Quota uses consumeRateLimit's atomic fixed window. The window resets when its
+// expires_at reaches the next aligned window start; the boundary is the new window.
 
 export interface CleanupResult {
   commentsDeleted: number;
@@ -119,8 +122,13 @@ export async function createComment(
   let status: 'pending' | 'public' | 'author_only' = 'pending';
   let visibleUntil: number | null = null;
   if (membership.tier === 'svip') {
-    const recentCount = await countCommentsSince(env.DB, userId, now - SVIP_COMMENT_WINDOW_MS);
-    if (recentCount < SVIP_PUBLIC_COMMENT_LIMIT) {
+    const quota = await consumeRateLimit(
+      env.DB,
+      `comment:svip:${userId}`,
+      SVIP_PUBLIC_COMMENT_LIMIT,
+      SVIP_COMMENT_WINDOW_MS
+    );
+    if (quota.count <= SVIP_PUBLIC_COMMENT_LIMIT) {
       status = 'public';
     } else {
       status = 'author_only';
@@ -168,14 +176,40 @@ export async function reviewComment(
   const now = Date.now();
   const status = decision === 'approve' ? 'public' : 'rejected';
   const reason = decision === 'reject' ? rejectionReason?.trim() || null : null;
-  const updated = await updateCommentDecision(env.DB, commentId, {
+  const after = {
+    id: comment.id,
+    productId: comment.product_id,
+    body: comment.body,
     status,
-    reviewedBy: moderatorUserId,
-    reviewedAt: now,
-    rejectionReason: reason,
-    updatedAt: now
-  });
-  if (!updated) {
+    rejectionReason: reason
+  };
+  const results = await env.DB.batch([
+    buildUpdateCommentDecisionStatement(env.DB, commentId, {
+      status,
+      reviewedBy: moderatorUserId,
+      reviewedAt: now,
+      rejectionReason: reason,
+      updatedAt: now
+    }),
+    buildAuditStatement(
+      env.DB,
+      {
+        actorUserId: moderatorUserId,
+        action: decision === 'approve' ? 'comment.approved' : 'comment.rejected',
+        entityType: 'comment',
+        entityId: commentId,
+        before: {
+          id: comment.id,
+          productId: comment.product_id,
+          body: comment.body,
+          status: comment.status
+        },
+        after
+      },
+      { onlyIfChanged: true }
+    )
+  ]);
+  if ((results[0]?.meta.changes ?? 0) !== 1) {
     throw new ApiError('invalid_state', 'Comment is no longer pending', 409);
   }
 
@@ -183,26 +217,6 @@ export async function reviewComment(
   if (!reviewed) {
     throw new Error('Failed to load the reviewed comment');
   }
-
-  await recordAudit(env, {
-    actorUserId: moderatorUserId,
-    action: decision === 'approve' ? 'comment.approved' : 'comment.rejected',
-    entityType: 'comment',
-    entityId: commentId,
-    before: {
-      id: comment.id,
-      productId: comment.product_id,
-      body: comment.body,
-      status: comment.status
-    },
-    after: {
-      id: reviewed.id,
-      productId: reviewed.product_id,
-      body: reviewed.body,
-      status: reviewed.status,
-      rejectionReason: reviewed.rejection_reason
-    }
-  });
 
   return toCommentPayload(reviewed, now);
 }
@@ -223,24 +237,29 @@ export async function deleteComment(
     throw new ApiError('forbidden', 'Comment deletion is not allowed', 403);
   }
 
-  const deleted = await deleteCommentById(env.DB, commentId);
-  if (!deleted) {
+  const results = await env.DB.batch([
+    buildDeleteCommentStatement(env.DB, commentId),
+    buildAuditStatement(
+      env.DB,
+      {
+        actorUserId,
+        action: 'comment.deleted',
+        entityType: 'comment',
+        entityId: commentId,
+        before: {
+          id: comment.id,
+          productId: comment.product_id,
+          userId: comment.user_id,
+          body: comment.body,
+          status: comment.status
+        }
+      },
+      { onlyIfChanged: true }
+    )
+  ]);
+  if ((results[0]?.meta.changes ?? 0) !== 1) {
     throw new ApiError('comment_not_found', 'Comment not found', 404);
   }
-
-  await recordAudit(env, {
-    actorUserId,
-    action: 'comment.deleted',
-    entityType: 'comment',
-    entityId: commentId,
-    before: {
-      id: comment.id,
-      productId: comment.product_id,
-      userId: comment.user_id,
-      body: comment.body,
-      status: comment.status
-    }
-  });
 }
 
 export async function cleanupExpiredData(env: Env, now = Date.now()): Promise<CleanupResult> {
@@ -250,4 +269,3 @@ export async function cleanupExpiredData(env: Env, now = Date.now()): Promise<Cl
   ]);
   return { commentsDeleted, rateLimitsDeleted };
 }
-

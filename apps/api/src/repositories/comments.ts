@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type {
   AdminCommentStatus,
   CommentStatus,
@@ -148,24 +148,12 @@ export async function insertComment(
   return created;
 }
 
-export async function countCommentsSince(
-  db: D1Database,
-  userId: string,
-  since: number
-): Promise<number> {
-  const row = await db
-    .prepare('SELECT COUNT(*) AS count FROM comments WHERE user_id = ? AND created_at > ?')
-    .bind(userId, since)
-    .first<{ count: number }>();
-  return row?.count ?? 0;
-}
-
-export async function updateCommentDecision(
+export function buildUpdateCommentDecisionStatement(
   db: D1Database,
   id: string,
   input: UpdateCommentDecisionInput
-): Promise<boolean> {
-  const result = await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `UPDATE comments
        SET status = ?, reviewed_by = ?, reviewed_at = ?, rejection_reason = ?, visible_until = NULL, updated_at = ?
@@ -178,14 +166,11 @@ export async function updateCommentDecision(
       input.rejectionReason,
       input.updatedAt,
       id
-    )
-    .run();
-  return (result.meta.changes ?? 0) === 1;
+    );
 }
 
-export async function deleteCommentById(db: D1Database, id: string): Promise<boolean> {
-  const result = await db.prepare('DELETE FROM comments WHERE id = ?').bind(id).run();
-  return (result.meta.changes ?? 0) === 1;
+export function buildDeleteCommentStatement(db: D1Database, id: string): D1PreparedStatement {
+  return db.prepare('DELETE FROM comments WHERE id = ?').bind(id);
 }
 
 export async function deleteExpiredAuthorOnlyComments(
