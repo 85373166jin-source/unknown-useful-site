@@ -2,7 +2,7 @@
 
 The public site and the `/admin/` dashboard are built from the same Vite app and
 published together from one repository to GitHub Pages. The Cloudflare Worker API,
-D1 database, and R2 screenshot bucket are deployed separately with Wrangler.
+D1 database, and Workers KV screenshot namespace are deployed separately with Wrangler.
 
 Do not commit production secrets or payment screenshots. Keep secrets in the
 Cloudflare dashboard or in local `.dev.vars` files, both of which are git-ignored.
@@ -126,7 +126,7 @@ Run this after the Worker has been deployed at least once (see **Cloudflare Work
 to `/seed` on `127.0.0.1` only. The seed Worker rejects requests without the
 token and is never mounted by `apps/api/src/index.ts`, so the public main entry
 has no `/seed` route. The temporary remote dev session uses the Worker's remote
-D1, R2, and secret bindings, so `ADMIN_PASSWORD_HASH`,
+D1, Workers KV, and secret bindings, so `ADMIN_PASSWORD_HASH`,
 `SUPER_COURSE_PASSWORD_HASH`, and `ANBU_COURSE_PASSWORD_HASH` are read from the
 Cloudflare secrets rather than from files.
 
@@ -134,24 +134,23 @@ Set `$env:SEED_TOKEN` to a fixed value if the run must use a known token;
 otherwise the script generates one for the session. Do not deploy
 `apps/api/src/db/seed.ts` to production.
 
-## R2
+## Workers KV
 
-Create the screenshot bucket once:
+Create the private screenshot namespace once:
 
 ```powershell
-npx wrangler r2 bucket create unknown-useful-site-screenshots
+npx wrangler kv namespace create unknown-useful-site-screenshots --binding SCREENSHOTS
 ```
 
 The binding is already declared in `apps/api/wrangler.toml`:
 
 ```toml
-[[r2_buckets]]
+[[kv_namespaces]]
 binding = "SCREENSHOTS"
-bucket_name = "unknown-useful-site-screenshots"
+id = "<KV_NAMESPACE_ID>"
 ```
 
-Payment screenshots are written to private R2 and are served only through the
-authenticated admin endpoint. Never make the bucket public.
+Payment screenshots are written to the private Workers KV namespace and are served only through the authenticated admin endpoint. Never expose raw KV keys to public clients.
 
 ## Secrets
 
@@ -207,7 +206,7 @@ https://www.example.com,https://example.com
 
 ## Cloudflare Worker
 
-Deploy the Worker only after the D1 database, migrations, R2 bucket, and secrets
+Deploy the Worker only after the D1 database, migrations, Workers KV namespace, and secrets
 above are in place.
 
 1. Log in to Cloudflare from the repository machine:

@@ -190,7 +190,7 @@ describe('payment claims API', () => {
       .bind(claim.orderNo)
       .first<{ screenshot_key: string }>();
     expect(stored?.screenshot_key).toMatch(/^payment-claims\//);
-    expect(await env.SCREENSHOTS.head(stored!.screenshot_key)).not.toBeNull();
+    expect(await env.SCREENSHOTS.get(stored!.screenshot_key)).not.toBeNull();
   });
 
   it('approves a bundle claim and grants both super and anbu entitlements', async () => {

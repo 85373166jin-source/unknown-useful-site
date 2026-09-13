@@ -4,7 +4,7 @@ import operationsDoc from '../../../docs/OPERATIONS.md?raw';
 import deployWorkflow from '../../../.github/workflows/deploy-pages.yml?raw';
 
 describe('deployment documentation', () => {
-  const requiredHeadings = ['GitHub Pages', 'Cloudflare Worker', 'D1', 'R2', 'Secrets', 'Rollback'];
+  const requiredHeadings = ['GitHub Pages', 'Cloudflare Worker', 'D1', 'Workers KV', 'Secrets', 'Rollback'];
 
   it('contains every required heading', () => {
     for (const heading of requiredHeadings) {
@@ -43,18 +43,18 @@ describe('deployment documentation', () => {
     expect(deployWorkflow).toContain('exit 1');
   });
 
-  it('orders D1, R2, and secrets before the first Worker deployment', () => {
+  it('orders D1, Workers KV, and secrets before the first Worker deployment', () => {
     const d1 = deploymentDoc.indexOf('## D1');
-    const r2 = deploymentDoc.indexOf('## R2');
+    const kv = deploymentDoc.indexOf('## Workers KV');
     const secrets = deploymentDoc.indexOf('## Secrets');
     const worker = deploymentDoc.indexOf('## Cloudflare Worker');
 
     expect(d1).toBeGreaterThan(-1);
-    expect(r2).toBeGreaterThan(-1);
+    expect(kv).toBeGreaterThan(-1);
     expect(secrets).toBeGreaterThan(-1);
     expect(worker).toBeGreaterThan(-1);
     expect(d1).toBeLessThan(worker);
-    expect(r2).toBeLessThan(worker);
+    expect(kv).toBeLessThan(worker);
     expect(secrets).toBeLessThan(worker);
   });
 

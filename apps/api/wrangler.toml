@@ -1,16 +1,17 @@
 name = "unknown-useful-site-api"
+account_id = "63d046858d3a8e3d02e828a03e373da8"
 compatibility_date = "2026-09-12"
 main = "src/index.ts"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "unknown_useful_site_db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "8afefa5a-d4e4-466e-a424-91653ee7a88b"
 migrations_dir = "migrations"
 
-[[r2_buckets]]
+[[kv_namespaces]]
 binding = "SCREENSHOTS"
-bucket_name = "unknown-useful-site-screenshots"
+id = "411bb71f96fd446797426d4fb8d994af"
 
 [vars]
 ADMIN_USERNAME = "admin"

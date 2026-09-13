@@ -1,13 +1,13 @@
 # unknown-useful-site
 
-某不知名有用的网站。一个包含公开课程页面、购买/课程密码解锁、付款截图审核、管理员后台，以及基于 Cloudflare Workers + D1 + R2 的 API 服务。
+某不知名有用的网站。一个包含公开课程页面、购买/课程密码解锁、付款截图审核、管理员后台，以及基于 Cloudflare Workers + D1 + Workers KV 的 API 服务。
 
 ## 仓库结构
 
 - `apps/web` — Vite + React 前端，同时构建公开站点和 `/admin/` 站长后台。
 - `apps/api` — Hono Worker API，提供认证、课程目录、权益、订单、进度和管理员接口。
 - `packages/contracts` — 前后端共享的课程目录与 Zod schema。
-- `docs/DEPLOYMENT.md` — GitHub Pages、Workers、D1、R2 的部署流程。
+- `docs/DEPLOYMENT.md` — GitHub Pages、Workers、D1、Workers KV 的部署流程。
 - `docs/OPERATIONS.md` — 日常运营操作说明。
 - `tests/e2e` — Playwright 端到端测试与本地服务器/数据夹具。
 
@@ -42,7 +42,7 @@ npm run test:e2e
 - `npm run typecheck` 和 `npm run build` 做 TypeScript 与生产构建校验。
 - `npm run test:e2e` 使用 Playwright 启动本地 `wrangler dev --local` 与 Vite，运行 `tests/e2e` 下的真实端到端旅程。
 
-> **注意：** `npm run test:e2e` 会删除 `apps/api/.wrangler/state` 下的本地 D1 和 R2 状态，并重新应用迁移与 E2E 种子数据。不要在运行 E2E 前依赖本地 `.wrangler` 中手工写入的数据。
+> **注意：** `npm run test:e2e` 会删除 `apps/api/.wrangler/state` 下的本地 D1 和 KV 状态，并重新应用迁移与 E2E 种子数据。不要在运行 E2E 前依赖本地 `.wrangler` 中手工写入的数据。
 
 ### Playwright 浏览器
 

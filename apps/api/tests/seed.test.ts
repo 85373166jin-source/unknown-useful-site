@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 import type { Env } from '../src/env';
 import app from '../src/index';
 import seedWorker from '../src/db/seed';
@@ -11,7 +11,7 @@ function makeSeedEnv(seedToken?: string): Env {
         throw new Error('DB should not be reached for unauthorized requests');
       }
     } as unknown as D1Database,
-    SCREENSHOTS: {} as R2Bucket,
+    SCREENSHOTS: {} as KVNamespace,
     SESSION_PEPPER: 'test-session-pepper',
     CONTACT_HMAC_SECRET: 'test-contact-secret',
     ADMIN_USERNAME: 'admin',

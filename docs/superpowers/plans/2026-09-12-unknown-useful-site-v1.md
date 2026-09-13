@@ -1,5 +1,8 @@
 # 某不知名有用的网站第一期 Implementation Plan
 
+> Implementation update (2026-09-13): payment screenshot storage was changed from Cloudflare R2 to Workers KV because R2 activation required a bank card. The API contract, private admin-only access, and screenshot size/type limits are unchanged.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
 
 **Goal:** Build the first free-hosted release of “某不知名有用的网站” with a public resource catalog, permanent account system, two course-access paths, payment screenshot review, video progress sync, and a separate revenue-focused admin interface.

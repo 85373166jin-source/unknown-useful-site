@@ -205,8 +205,8 @@ export async function createPaymentClaim(
     throw new ApiError('unsupported_media_type', 'Screenshot must be PNG, JPEG, or WebP', 400);
   }
   const screenshotKey = `payment-claims/${userId}/${orderNo}.${extension}`;
-  await env.SCREENSHOTS.put(screenshotKey, input.screenshot, {
-    httpMetadata: { contentType: input.screenshot.type }
+  await env.SCREENSHOTS.put(screenshotKey, await input.screenshot.arrayBuffer(), {
+    metadata: { contentType: input.screenshot.type }
   });
   const now = Date.now();
   return insertPaymentClaim(env.DB, {
@@ -234,20 +234,20 @@ export async function listPaymentClaims(env: Env): Promise<PaymentClaimRow[]> {
 export async function getPaymentClaimScreenshot(
   env: Env,
   orderNo: string
-): Promise<{ contentType: string; body: ReadableStream }> {
+): Promise<{ contentType: string; body: ArrayBuffer }> {
   const claim = await findPaymentClaimByOrderNo(env.DB, orderNo);
   if (!claim) {
     throw new ApiError('order_not_found', 'Payment claim not found', 404);
   }
 
-  const object = await env.SCREENSHOTS.get(claim.screenshot_key);
-  if (!object) {
+  const object = await env.SCREENSHOTS.getWithMetadata<{ contentType?: string }>(claim.screenshot_key, 'arrayBuffer');
+  if (!object.value) {
     throw new ApiError('screenshot_not_found', 'Screenshot not found', 404);
   }
 
   return {
-    contentType: object.httpMetadata?.contentType ?? 'application/octet-stream',
-    body: object.body
+    contentType: object.metadata?.contentType ?? 'application/octet-stream',
+    body: object.value
   };
 }
 

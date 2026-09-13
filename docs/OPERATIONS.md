@@ -83,24 +83,24 @@ outside the repository; the `work/` directory is git-ignored.
 
 ## Screenshot backup
 
-Payment screenshots live in the private R2 bucket
-`unknown-useful-site-screenshots` under
+Payment screenshots live in the private Workers KV namespace
+`unknown-useful-site-screenshots` (namespace ID `411bb71f96fd446797426d4fb8d994af`) under
 `payment-claims/{userId}/{orderNo}.{ext}`.
 
 1. List the current objects:
 
    ```powershell
-   npx wrangler r2 object list unknown-useful-site-screenshots --remote
+   npx wrangler kv key list --namespace-id 411bb71f96fd446797426d4fb8d994af --remote
    ```
 
 2. Download the objects you need to an offline location:
 
    ```powershell
-   npx wrangler r2 object get unknown-useful-site-screenshots payment-claims/<userId>/<orderNo>.<ext> --remote
+   npx wrangler kv key get payment-claims/<userId>/<orderNo>.<ext> --namespace-id 411bb71f96fd446797426d4fb8d994af --remote
    ```
 
 For a full offline archive, repeat the download for every key returned by the
-list command, or use the Cloudflare dashboard R2 bucket export. Store screenshot
+list command, or export through the Cloudflare dashboard. Store screenshot
 backups as private files because they contain payment information.
 
 ## D1 backup
@@ -129,10 +129,10 @@ and execute the data-only SQL.
 
 ## Migration to a domestic server
 
-Cloudflare Pages, Workers, D1, and R2 have no domestic equivalent with identical
+Cloudflare Pages, Workers, D1, and Workers KV have no domestic equivalent with identical
 APIs, so migration is a re-deployment rather than a live move.
 
-1. Export the database with `npm run export:data` and download all R2 screenshots.
+1. Export the database with `npm run export:data` and download all Workers KV screenshots.
 2. Copy the public media directory and the built frontend to the new static host.
 3. Deploy the Hono API to the new server with a D1-compatible SQLite database.
    Create the schema by applying `apps/api/migrations/0001_init.sql`, then import
@@ -140,7 +140,7 @@ APIs, so migration is a re-deployment rather than a live move.
    data steps do not collide. Alternatively, import the default full export
    directly into an empty database because it already contains both schema and
    data.
-4. Replace the R2 bucket with an object store or local disk and keep the
+4. Replace the Workers KV screenshot store with an object store or local disk and keep the
    `payment-claims/{userId}/{orderNo}.{ext}` path convention.
 5. Rebuild the frontend with the new API origin:
 

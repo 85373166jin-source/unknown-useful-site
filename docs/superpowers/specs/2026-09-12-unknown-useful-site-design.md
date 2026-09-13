@@ -1,5 +1,8 @@
 # 某不知名有用的网站：第一期设计规格
 
+> Implementation update (2026-09-13): payment screenshot storage was changed from Cloudflare R2 to Workers KV because R2 activation required a bank card. The API contract, private admin-only access, and screenshot size/type limits are unchanged.
+
+
 - 日期：2026-09-12
 - 状态：已完成设计讨论，等待用户审阅
 - 第一期范围：综合资源站基础框架、火影课程、账号系统、付款审核、站长后台

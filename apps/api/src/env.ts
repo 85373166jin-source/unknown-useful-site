@@ -1,6 +1,6 @@
 export interface Env {
   DB: D1Database;
-  SCREENSHOTS: R2Bucket;
+  SCREENSHOTS: KVNamespace;
   SESSION_PEPPER: string;
   CONTACT_HMAC_SECRET: string;
   ADMIN_USERNAME: string;
