@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 
-const TABLES_TO_CLEAR = [
+export const TABLES_TO_CLEAR = [
   'watch_progress',
   'login_events',
   'rate_limits',
@@ -15,8 +15,11 @@ const TABLES_TO_CLEAR = [
   'users'
 ] as const;
 
+// Task 2 adds columns to existing tables rather than new tables, so clearing
+// these rows is enough to reset identity, membership, and cent data between tests.
 export async function resetTestDatabase(db: D1Database): Promise<void> {
   for (const table of TABLES_TO_CLEAR) {
     await db.prepare(`DELETE FROM ${table}`).run();
   }
 }
+

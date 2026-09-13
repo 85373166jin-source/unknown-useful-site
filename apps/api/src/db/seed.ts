@@ -10,6 +10,11 @@ const SERIES_PASSWORD_BINDING = {
   anbu: 'ANBU_COURSE_PASSWORD_HASH'
 } as const satisfies Record<SeriesId, keyof Pick<Env, 'SUPER_COURSE_PASSWORD_HASH' | 'ANBU_COURSE_PASSWORD_HASH'>>;
 
+const membershipProducts = [
+  { id: 'vip_monthly', title: 'VIP 会员', priceCents: 990, productType: 'membership' },
+  { id: 'svip_monthly', title: 'SVIP 豪华会员', priceCents: 1990, productType: 'membership' }
+] as const;
+
 export async function seedCatalogAndAdmin(env: Env): Promise<void> {
   const now = Date.now();
 
@@ -18,11 +23,13 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
     const product = CATALOG.products[productId];
     await env.DB.prepare(
       `INSERT INTO products
-        (id, title, price_yuan, status, category_id, sort_order, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         price_yuan = excluded.price_yuan,
+        price_cents = excluded.price_cents,
+        product_type = excluded.product_type,
         status = excluded.status,
         category_id = excluded.category_id,
         sort_order = excluded.sort_order,
@@ -33,6 +40,8 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
         product.id,
         product.title,
         product.priceYuan,
+        product.priceYuan * 100,
+        product.productType,
         product.status,
         product.categoryId,
         PRODUCT_SORT_ORDER[productId],
@@ -88,11 +97,42 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
       .run();
   }
 
+  for (const [index, product] of membershipProducts.entries()) {
+    await env.DB.prepare(
+      `INSERT INTO products
+        (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'active', 'memberships', ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        price_yuan = excluded.price_yuan,
+        price_cents = excluded.price_cents,
+        product_type = excluded.product_type,
+        status = excluded.status,
+        category_id = excluded.category_id,
+        sort_order = excluded.sort_order,
+        description = excluded.description,
+        updated_at = excluded.updated_at`
+    )
+      .bind(
+        product.id,
+        product.title,
+        Math.round(product.priceCents / 100),
+        product.priceCents,
+        product.productType,
+        4 + index,
+        `${product.title} 30 天`,
+        now,
+        now
+      )
+      .run();
+  }
+
   await env.DB.prepare(
-    `INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at)
-     VALUES ('admin', ?, ?, 'admin', 'active', ?, ?)
+    `INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at)
+     VALUES ('admin', ?, ?, 'admin', 'owner', 'active', ?, ?)
      ON CONFLICT(id) DO UPDATE SET
       role = excluded.role,
+      permission_role = excluded.permission_role,
       status = excluded.status,
       updated_at = excluded.updated_at`
   )
@@ -146,3 +186,4 @@ export default {
     return Response.json({ ok: true });
   }
 };
+
