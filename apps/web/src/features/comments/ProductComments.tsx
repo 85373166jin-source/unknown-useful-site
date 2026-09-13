@@ -24,7 +24,7 @@ function membershipBadgeLabel(comment: Comment): string | null {
 }
 
 export function ProductComments({ productId, title }: ProductCommentsProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [comments, setComments] = useState<Comment[]>([]);
   const [canComment, setCanComment] = useState(false);
@@ -35,6 +35,7 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const returnTo = `${location.pathname}${location.search}`;
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +66,9 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+    // Refetch whenever the viewer changes (login, logout, or an expired session) so
+    // a stale 401 does not leave the page stuck in an error state.
+  }, [productId, userId]);
 
   async function submitComment(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -123,11 +126,7 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
         </div>
       ) : null}
 
-      {!canComment ? (
-        <p className="comments__login">
-          <Link to={`/login?returnTo=${encodeURIComponent(returnTo)}`}>登录后评论</Link>
-        </p>
-      ) : (
+      {authLoading || loading ? null : user || canComment ? (
         <form className="form comments__form" onSubmit={submitComment}>
           <div className="field">
             <label htmlFor={`comment-body-${productId}`}>评论内容</label>
@@ -143,6 +142,10 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
             发表评论
           </button>
         </form>
+      ) : (
+        <p className="comments__login">
+          <Link to={`/login?returnTo=${encodeURIComponent(returnTo)}`}>登录后评论</Link>
+        </p>
       )}
 
       {loading ? (

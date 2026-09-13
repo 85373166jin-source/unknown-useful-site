@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Comment, CommentsResponse } from '@site/contracts';
-import { apiFetch } from '../../lib/api';
+import { AUTH_EXPIRED_EVENT, ApiError, apiFetch } from '../../lib/api';
 import type { AuthUser } from '../../lib/auth-context';
 import { TestProviders } from '../../test/TestProviders';
 import { ProductComments } from './ProductComments';
@@ -321,5 +321,87 @@ describe('ProductComments', () => {
     expect(screen.queryByText(/隐藏/)).not.toBeInTheDocument();
     expect(screen.queryByText(/仅作者可见/)).not.toBeInTheDocument();
   });
-});
 
+  it('does not show the guest login prompt to an authenticated user while comments load', async () => {
+    let resolveGet: ((value: unknown) => void) | null = null;
+    vi.mocked(apiFetch).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGet = resolve;
+        }) as never
+    );
+
+    renderComments({ productId: 'super' }, { user: authUser('user-1') });
+
+    expect(screen.queryByRole('link', { name: '登录后评论' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('评论内容')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveGet?.({ comments: [], canComment: true, currentStatus: 'normal' });
+    });
+
+    expect(await screen.findByLabelText('评论内容')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '登录后评论' })).not.toBeInTheDocument();
+  });
+
+  it('refetches as a guest after the session expires instead of staying in an error state', async () => {
+    let call = 0;
+    let releaseFirst: (() => void) | null = null;
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      const method = (init as { method?: string } | undefined)?.method;
+      if (path === '/products/super/comments' && !method) {
+        call += 1;
+        if (call === 1) {
+          // Hold the first request open, then fail it once the session expires.
+          await new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          });
+          throw new ApiError('unauthorized', 'Invalid or expired bearer token', 401);
+        }
+        return {
+          comments: [comment({ id: 'c-1', body: '游客可见评论' })],
+          canComment: false,
+          currentStatus: 'guest'
+        } as never;
+      }
+      throw new Error(`Unexpected apiFetch request: ${String(path)}`);
+    });
+
+    renderComments({ productId: 'super' }, { user: authUser('user-1') });
+    await waitFor(() => expect(releaseFirst).not.toBeNull());
+
+    // The stored session expires: the app clears the viewer and notifies the tree.
+    await act(async () => {
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+      releaseFirst?.();
+    });
+
+    expect(await screen.findByText('游客可见评论')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('link', { name: '登录后评论' })).toBeInTheDocument();
+    expect(call).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not show the 合作管理员 badge for an owner-authored comment', async () => {
+    mockGet({
+      comments: [
+        comment({
+          id: 'owner',
+          body: '站长评论',
+          author: {
+            id: 'owner-user',
+            username: 'owneruser',
+            membershipTier: 'normal',
+            membershipRemainingDays: 0,
+            isAdmin: false
+          }
+        })
+      ]
+    });
+
+    renderComments({ productId: 'super' });
+
+    const ownerItem = (await screen.findByText('站长评论')).closest('li') as HTMLElement;
+    expect(within(ownerItem).queryByText('合作管理员')).not.toBeInTheDocument();
+  });
+});

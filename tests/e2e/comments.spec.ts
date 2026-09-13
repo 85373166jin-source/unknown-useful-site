@@ -166,6 +166,12 @@ test('an owner deletes a public comment from the moderation page', async ({ page
   const row = page.locator('.admin-comment', { hasText: body });
   await expect(row).toBeVisible();
   await row.getByRole('button', { name: '删除' }).click();
+
+  const dialog = page.getByRole('alertdialog', { name: '确认删除评论' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('确认删除这条评论？');
+  await dialog.getByRole('button', { name: '确认删除' }).click();
+
   await expect(page.getByRole('status')).toContainText('评论已删除');
 
   const guest = await listComments(request, null);

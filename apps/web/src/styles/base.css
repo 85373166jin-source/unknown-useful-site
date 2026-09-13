@@ -166,6 +166,16 @@ button:disabled {
   background: var(--color-primary-hover);
 }
 
+.button--danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #ffffff;
+}
+
+.button--danger:hover {
+  background: #b91c1c;
+}
+
 .alert {
   border-radius: var(--radius);
   border: 1px solid transparent;

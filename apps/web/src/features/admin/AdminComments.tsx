@@ -8,8 +8,18 @@ const FILTERS: { status: AdminCommentStatus; label: string }[] = [
   { status: 'author_only', label: '限时评论' }
 ];
 
+const DELETE_EXCERPT_MAX_LENGTH = 40;
+
 function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
+}
+
+function bodyExcerpt(body: string): string {
+  const trimmed = body.trim();
+  if (trimmed.length <= DELETE_EXCERPT_MAX_LENGTH) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, DELETE_EXCERPT_MAX_LENGTH)}…`;
 }
 
 export function AdminComments() {
@@ -18,9 +28,12 @@ export function AdminComments() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  // Tracks the comment currently mid-action so one row's request does not disable
+  // every other row's buttons.
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +70,7 @@ export function AdminComments() {
   }
 
   async function approve(comment: Comment): Promise<void> {
-    setBusy(true);
+    setBusyId(comment.id);
     setError(null);
     setNotice(null);
     try {
@@ -70,7 +83,7 @@ export function AdminComments() {
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '审核失败，请稍后重试');
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -82,7 +95,7 @@ export function AdminComments() {
       return;
     }
 
-    setBusy(true);
+    setBusyId(comment.id);
     setError(null);
     setNotice(null);
     try {
@@ -97,22 +110,23 @@ export function AdminComments() {
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '审核失败，请稍后重试');
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
   async function remove(comment: Comment): Promise<void> {
-    setBusy(true);
+    setBusyId(comment.id);
     setError(null);
     setNotice(null);
     try {
       await apiFetch(`/admin/comments/${comment.id}`, { method: 'DELETE' });
       removeFromList(comment.id);
+      setConfirmingDeleteId(null);
       setNotice('评论已删除');
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '删除失败，请稍后重试');
     } finally {
-      setBusy(false);
+      setBusyId(null);
     }
   }
 
@@ -121,7 +135,7 @@ export function AdminComments() {
       <header className="admin-page__header">
         <div>
           <h1>评论审核</h1>
-          <p>审核用户评论，通过后公开，拒绝需填写原因。已发布评论只能删除。</p>
+          <p>审核用户评论，通过后公开，拒绝需填写原因。删除评论前需要二次确认。</p>
         </div>
       </header>
 
@@ -146,6 +160,7 @@ export function AdminComments() {
               setStatus(filter.status);
               setRejectingId(null);
               setRejectReason('');
+              setConfirmingDeleteId(null);
               setNotice(null);
               setError(null);
             }}
@@ -186,7 +201,7 @@ export function AdminComments() {
                       <button
                         type="button"
                         className="button button--primary"
-                        disabled={busy}
+                        disabled={busyId === comment.id}
                         onClick={() => void approve(comment)}
                       >
                         通过
@@ -194,25 +209,59 @@ export function AdminComments() {
                       <button
                         type="button"
                         className="button"
-                        disabled={busy}
+                        disabled={busyId === comment.id}
                         onClick={() => {
                           setRejectingId(comment.id);
                           setRejectReason('');
+                          setConfirmingDeleteId(null);
                         }}
                       >
                         拒绝
                       </button>
                     </>
                   ) : null}
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={busy}
-                    onClick={() => void remove(comment)}
-                  >
-                    删除
-                  </button>
+                  {confirmingDeleteId === comment.id ? null : (
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={busyId === comment.id}
+                      onClick={() => {
+                        setConfirmingDeleteId(comment.id);
+                        setRejectingId(null);
+                        setRejectReason('');
+                        setError(null);
+                      }}
+                    >
+                      删除
+                    </button>
+                  )}
                 </div>
+
+                {confirmingDeleteId === comment.id ? (
+                  <div className="admin-delete-confirm" role="alertdialog" aria-label="确认删除评论">
+                    <p className="admin-delete-confirm__title">确认删除这条评论？</p>
+                    <p className="admin-delete-confirm__author">作者：{comment.author.username}</p>
+                    <p className="admin-delete-confirm__excerpt">“{bodyExcerpt(comment.body)}”</p>
+                    <div className="admin-row-actions">
+                      <button
+                        type="button"
+                        className="button button--danger"
+                        disabled={busyId === comment.id}
+                        onClick={() => void remove(comment)}
+                      >
+                        确认删除
+                      </button>
+                      <button
+                        type="button"
+                        className="button"
+                        disabled={busyId === comment.id}
+                        onClick={() => setConfirmingDeleteId(null)}
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {rejectingId === comment.id ? (
                   <form className="admin-review-form" onSubmit={(event) => void confirmReject(event, comment)}>
@@ -227,13 +276,13 @@ export function AdminComments() {
                       />
                     </div>
                     <div className="admin-row-actions">
-                      <button type="submit" className="button button--primary" disabled={busy}>
+                      <button type="submit" className="button button--primary" disabled={busyId === comment.id}>
                         确认拒绝
                       </button>
                       <button
                         type="button"
                         className="button"
-                        disabled={busy}
+                        disabled={busyId === comment.id}
                         onClick={() => {
                           setRejectingId(null);
                           setRejectReason('');
@@ -252,4 +301,3 @@ export function AdminComments() {
     </section>
   );
 }
-

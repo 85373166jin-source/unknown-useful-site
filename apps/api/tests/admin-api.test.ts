@@ -312,6 +312,41 @@ describe('admin reporting and user management API', () => {
     expect(report.series.reduce((sum, point) => sum + point.cents, 0)).toBe(report.totalCents);
   });
 
+  it('excludes the zero-priced free product from the revenue by-product breakdown', async () => {
+    const adminToken = await seedCatalogAndAdmin();
+    const now = Date.now();
+    await env.DB.prepare(
+      `INSERT INTO products
+        (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+       VALUES ('free', '免费资源专区', 0, 0, 'other', 'active', 'free', 6, '', ?, ?)`
+    )
+      .bind(now, now)
+      .run();
+
+    const { token } = await registerUser('alice');
+    const claim = await (await createClaim(token)).json<Claim>();
+    const review = await reviewClaim(adminToken, claim.orderNo, {
+      decision: 'approve',
+      actualAmountCents: 4900
+    });
+    expect(review.status).toBe(200);
+
+    const response = await app.request('/api/v1/admin/revenue?range=30d', { headers: authHeaders(adminToken) }, env);
+    expect(response.status).toBe(200);
+    const report = await response.json<Revenue>();
+    expect(report.byProduct).not.toHaveProperty('free');
+    expect(report.byProduct.bundle).toBe(4900);
+    // Real product and membership SKUs keep reporting as before.
+    expect(report.byProduct).toHaveProperty('vip_monthly');
+    expect(report.byCategory.courses).toBe(4900);
+
+    const dashboardResponse = await app.request('/api/v1/admin/dashboard', { headers: authHeaders(adminToken) }, env);
+    expect(dashboardResponse.status).toBe(200);
+    const dashboard = await dashboardResponse.json<Dashboard>();
+    expect(dashboard.byProduct).not.toHaveProperty('free');
+    expect(dashboard.byProduct.bundle).toBe(4900);
+  });
+
   it('buckets revenue by the server reviewed_at time instead of user-paid time', async () => {
     const adminToken = await seedCatalogAndAdmin();
     const { token } = await registerUser('alice');

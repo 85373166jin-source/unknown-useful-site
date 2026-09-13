@@ -310,11 +310,16 @@ export interface PendingPaymentClaimSummary {
   totalCents: number;
 }
 
+// Only products that can actually earn revenue feed the revenue-by-product
+// breakdown. Zero-priced / non-sellable placeholders (for example the DB-only
+// `free` resource product) are excluded so the owner report shows no empty row.
 export async function listProductsForRevenue(
   db: D1Database
 ): Promise<Array<{ id: string; title: string }>> {
   const result = await db
-    .prepare('SELECT id, title FROM products ORDER BY sort_order, id')
+    .prepare(
+      'SELECT id, title FROM products WHERE price_cents > 0 OR price_yuan > 0 ORDER BY sort_order, id'
+    )
     .all<{ id: string; title: string }>();
   return result.results ?? [];
 }

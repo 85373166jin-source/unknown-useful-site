@@ -68,7 +68,7 @@ export function toCommentPayload(row: CommentWithAuthorRow, now = Date.now()): C
         { tier: row.membership_tier, expiresAt: row.membership_expires_at },
         now
       ),
-      isAdmin: row.permission_role !== 'user'
+      isAdmin: row.permission_role === 'admin'
     },
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,

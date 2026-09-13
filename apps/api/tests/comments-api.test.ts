@@ -556,6 +556,21 @@ describe('comments moderation API', () => {
     );
   });
 
+  it('only marks partner admins with the isAdmin marker, not owners or regular users', async () => {
+    const alice = await registerUser('alice');
+    const moderator = await seedPrivilegedUser('moderator-1', 'moderator-1', 'admin');
+    const owner = await seedPrivilegedUser('owner-1', 'owner-1', 'owner');
+
+    const adminComment = await (await postComment(moderator.token, 'admin comment')).json<CommentPayload>();
+    expect(adminComment.author.isAdmin).toBe(true);
+
+    const ownerComment = await (await postComment(owner.token, 'owner comment')).json<CommentPayload>();
+    expect(ownerComment.author.isAdmin).toBe(false);
+
+    const userComment = await (await postComment(alice.token, 'user comment')).json<CommentPayload>();
+    expect(userComment.author.isAdmin).toBe(false);
+  });
+
   it('rejects moderation for unprivileged users and invalid filters', async () => {
     const alice = await registerUser('alice');
     const pending = await (await postComment(alice.token, 'pending')).json<CommentPayload>();

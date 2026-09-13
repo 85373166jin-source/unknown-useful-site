@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@site/contracts';
 import { apiFetch } from '../../lib/api';
@@ -139,7 +139,7 @@ describe('AdminComments', () => {
     expect(await screen.findByText('评论已拒绝')).toBeInTheDocument();
   });
 
-  it('deletes a comment', async () => {
+  it('requires confirmation before deleting and cancels without calling the API', async () => {
     const published = comment({ id: 'c-delete', body: '要删除的评论', status: 'public' });
     vi.mocked(apiFetch).mockImplementation(async (path, init) => {
       const method = (init as { method?: string } | undefined)?.method;
@@ -157,12 +157,90 @@ describe('AdminComments', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
 
+    const dialog = screen.getByRole('alertdialog', { name: '确认删除评论' });
+    expect(within(dialog).getByText('作者：alice')).toBeInTheDocument();
+    expect(within(dialog).getByText('“要删除的评论”')).toBeInTheDocument();
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalledWith('/admin/comments/c-delete', {
+      method: 'DELETE'
+    });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '删除' })).toBeInTheDocument();
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalledWith('/admin/comments/c-delete', {
+      method: 'DELETE'
+    });
+  });
+
+  it('deletes a comment after confirmation with the author and a short excerpt', async () => {
+    const longBody = '这是一条很长很长的评论内容'.repeat(8);
+    const published = comment({ id: 'c-delete', body: longBody, status: 'public' });
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      const method = (init as { method?: string } | undefined)?.method;
+      if (path === '/admin/comments?status=pending' && !method) {
+        return { comments: [published] } as never;
+      }
+      if (path === '/admin/comments/c-delete' && method === 'DELETE') {
+        return { ok: true } as never;
+      }
+      throw new Error(`Unexpected apiFetch request: ${String(path)} ${String(method)}`);
+    });
+
+    render(<AdminComments />, { wrapper: TestProviders });
+    await screen.findByText(longBody);
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    const dialog = screen.getByRole('alertdialog', { name: '确认删除评论' });
+    const excerpt = within(dialog).getByText(/^“.*…”$/).textContent ?? '';
+    expect(excerpt.length).toBeLessThan(longBody.length);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+
     await waitFor(() => {
       expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/admin/comments/c-delete', {
         method: 'DELETE'
       });
     });
     expect(await screen.findByText('评论已删除')).toBeInTheDocument();
+  });
+
+  it('keeps other rows actionable while one row is busy', async () => {
+    const first = comment({ id: 'c-1', body: '第一条评论' });
+    const second = comment({ id: 'c-2', body: '第二条评论' });
+    let resolveApprove: (() => void) | null = null;
+    vi.mocked(apiFetch).mockImplementation(async (path, init) => {
+      const method = (init as { method?: string } | undefined)?.method;
+      if (path === '/admin/comments?status=pending' && !method) {
+        return { comments: [first, second] } as never;
+      }
+      if (path === '/admin/comments/c-1' && method === 'PATCH') {
+        await new Promise<void>((resolve) => {
+          resolveApprove = resolve;
+        });
+        return comment({ ...first, status: 'public' }) as never;
+      }
+      throw new Error(`Unexpected apiFetch request: ${String(path)} ${String(method)}`);
+    });
+
+    render(<AdminComments />, { wrapper: TestProviders });
+    await screen.findByText('第一条评论');
+
+    const firstRow = screen.getByText('第一条评论').closest('li') as HTMLElement;
+    fireEvent.click(within(firstRow).getByRole('button', { name: '通过' }));
+
+    await waitFor(() => expect(resolveApprove).not.toBeNull());
+
+    const secondRow = screen.getByText('第二条评论').closest('li') as HTMLElement;
+    expect(within(firstRow).getByRole('button', { name: '通过' })).toBeDisabled();
+    expect(within(secondRow).getByRole('button', { name: '通过' })).toBeEnabled();
+    expect(within(secondRow).getByRole('button', { name: '删除' })).toBeEnabled();
+
+    await act(async () => {
+      resolveApprove?.();
+    });
+    expect(await screen.findByText('评论已通过')).toBeInTheDocument();
   });
 
   it('does not show hidden or spam labels', async () => {
