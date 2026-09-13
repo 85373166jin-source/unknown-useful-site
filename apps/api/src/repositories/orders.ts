@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import type { ProductType } from '@site/contracts';
 
 export type PaymentClaimStatus = 'pending' | 'approved' | 'rejected';
 
@@ -6,6 +7,8 @@ export interface ProductRow {
   id: string;
   title: string;
   price_yuan: number;
+  price_cents: number;
+  product_type: ProductType;
   status: string;
   category_id: string;
 }
@@ -17,6 +20,8 @@ export interface PaymentClaimRow {
   product_id: string;
   list_amount_yuan: number;
   actual_amount_yuan: number | null;
+  list_amount_cents: number;
+  actual_amount_cents: number | null;
   paid_at: number;
   contact_text: string;
   screenshot_key: string;
@@ -35,6 +40,9 @@ export interface InsertPaymentClaimInput {
   userId: string;
   productId: string;
   listAmountYuan: number;
+  actualAmountYuan: number | null;
+  listAmountCents: number;
+  actualAmountCents: number;
   paidAt: number;
   contactText: string;
   screenshotKey: string;
@@ -67,11 +75,11 @@ export interface InsertOrderEntitlementInput {
 }
 
 const PAYMENT_CLAIM_COLUMNS =
-  'id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, paid_at, contact_text, screenshot_key, status, rejection_reason, admin_note, reviewed_by, reviewed_at, created_at, updated_at';
+  'id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, list_amount_cents, actual_amount_cents, paid_at, contact_text, screenshot_key, status, rejection_reason, admin_note, reviewed_by, reviewed_at, created_at, updated_at';
 
 export async function findProductById(db: D1Database, productId: string): Promise<ProductRow | null> {
   return db
-    .prepare(`SELECT id, title, price_yuan, status, category_id FROM products WHERE id = ?`)
+    .prepare(`SELECT id, title, price_yuan, price_cents, product_type, status, category_id FROM products WHERE id = ?`)
     .bind(productId)
     .first<ProductRow>();
 }
@@ -103,9 +111,9 @@ export async function insertPaymentClaim(
   await db
     .prepare(
       `INSERT INTO payment_claims (
-        id, order_no, user_id, product_id, list_amount_yuan, paid_at, contact_text, screenshot_key,
-        status, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+        id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, list_amount_cents, actual_amount_cents,
+        paid_at, contact_text, screenshot_key, status, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
     )
     .bind(
       input.id,
@@ -113,6 +121,9 @@ export async function insertPaymentClaim(
       input.userId,
       input.productId,
       input.listAmountYuan,
+      input.actualAmountYuan,
+      input.listAmountCents,
+      input.actualAmountCents,
       input.paidAt,
       input.contactText,
       input.screenshotKey,
@@ -176,6 +187,7 @@ export async function updatePaymentClaimReview(
     .prepare(
       `UPDATE payment_claims
        SET actual_amount_yuan = ?,
+           actual_amount_cents = ?,
            status = ?,
            rejection_reason = ?,
            admin_note = ?,
@@ -186,6 +198,7 @@ export async function updatePaymentClaimReview(
     )
     .bind(
       input.actualAmountYuan,
+      input.actualAmountYuan === null ? null : input.actualAmountYuan * 100,
       input.status,
       input.rejectionReason,
       input.note,
@@ -212,12 +225,13 @@ export async function updatePaymentClaimCorrection(
     .prepare(
       `UPDATE payment_claims
        SET actual_amount_yuan = ?,
+           actual_amount_cents = ?,
            paid_at = ?,
            admin_note = ?,
            updated_at = ?
        WHERE order_no = ?`
     )
-    .bind(input.actualAmountYuan, input.paidAt, input.note, input.updatedAt, orderNo)
+    .bind(input.actualAmountYuan, input.actualAmountYuan * 100, input.paidAt, input.note, input.updatedAt, orderNo)
     .run();
 
   const updated = await findPaymentClaimByOrderNo(db, orderNo);
@@ -289,3 +303,4 @@ export async function getPendingPaymentClaimSummary(
 
   return { count: row?.count ?? 0, totalYuan: row?.total ?? 0 };
 }
+

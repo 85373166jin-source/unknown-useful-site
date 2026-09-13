@@ -3,6 +3,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
 import { listActiveEntitlementsForUser } from '../repositories/learning';
+import { findUserById } from '../repositories/users';
 import {
   findPaymentClaimByOrderNo,
   findProductById,
@@ -16,6 +17,8 @@ import {
   type PaymentClaimRow
 } from '../repositories/orders';
 import { recordAudit } from './audit';
+import { effectiveMembership } from './membership';
+import { priceProductForUser } from './pricing';
 
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 export const SCREENSHOT_EXTENSIONS: Record<string, string> = {
@@ -199,6 +202,22 @@ export async function createPaymentClaim(
   validateScreenshot(input.screenshot);
   await assertProductCanBeClaimed(env, userId, productId);
 
+  const user = await findUserById(env.DB, userId);
+  if (!user) {
+    throw new ApiError('unauthorized', 'Account is not active', 401);
+  }
+  const membership = effectiveMembership(
+    { tier: user.membership_tier, expiresAt: user.membership_expires_at },
+    Date.now()
+  );
+  const listAmountCents = product.price_cents > 0 ? product.price_cents : product.price_yuan * 100;
+  const actualAmountCents = priceProductForUser(
+    { price_cents: listAmountCents, product_type: product.product_type },
+    membership
+  );
+  const listAmountYuan = Math.round(listAmountCents / 100);
+  const actualAmountYuan = Math.round(actualAmountCents / 100);
+
   const orderNo = await generateUniqueOrderNo(env.DB);
   const extension = SCREENSHOT_EXTENSIONS[input.screenshot.type];
   if (!extension) {
@@ -214,7 +233,10 @@ export async function createPaymentClaim(
     orderNo,
     userId,
     productId,
-    listAmountYuan: product.price_yuan,
+    listAmountYuan,
+    actualAmountYuan,
+    listAmountCents,
+    actualAmountCents,
     paidAt,
     contactText,
     screenshotKey,
@@ -388,7 +410,7 @@ export async function reviewPaymentClaim(
     if (claim.status === 'rejected') {
       throw new ApiError('invalid_state', 'A rejected payment claim cannot be approved', 409);
     }
-    const amount = input.actualAmountYuan ?? claim.list_amount_yuan;
+    const amount = input.actualAmountYuan ?? claim.actual_amount_yuan ?? claim.list_amount_yuan;
     const note = input.note?.trim() || null;
     return approvePaymentClaim(env, reviewerUserId, claim, amount, note);
   }
