@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CATALOG, type Product, type ProductId } from '@site/contracts';
+import { CATALOG, type CourseProductId, type Product } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
-const CLAIMABLE_PRODUCTS = (Object.keys(CATALOG.products) as ProductId[])
+const CLAIMABLE_PRODUCTS = (Object.keys(CATALOG.products) as CourseProductId[])
   .map((id) => CATALOG.products[id])
   .filter((product) => product.status !== 'coming_soon');
 
-const CLAIMABLE_PRODUCT_IDS = new Set<ProductId>(CLAIMABLE_PRODUCTS.map((product) => product.id));
+const CLAIMABLE_PRODUCT_IDS = new Set<CourseProductId>(CLAIMABLE_PRODUCTS.map((product) => product.id));
 
 interface ClaimPayload {
   orderNo: string;
@@ -33,9 +33,9 @@ export function paymentQrUrls(baseUrl = import.meta.env.BASE_URL): { wechat: str
   };
 }
 
-function validInitialProductId(value: string | null): ProductId {
-  if (value && CLAIMABLE_PRODUCT_IDS.has(value as ProductId)) {
-    return value as ProductId;
+function validInitialProductId(value: string | null): CourseProductId {
+  if (value && CLAIMABLE_PRODUCT_IDS.has(value as CourseProductId)) {
+    return value as CourseProductId;
   }
   return 'bundle';
 }
@@ -43,7 +43,7 @@ function validInitialProductId(value: string | null): ProductId {
 export function PaymentClaimPage() {
   const [searchParams] = useSearchParams();
   const initialProductId = validInitialProductId(searchParams.get('productId'));
-  const [productId, setProductId] = useState<ProductId>(initialProductId);
+  const [productId, setProductId] = useState<CourseProductId>(initialProductId);
   const [paidAt, setPaidAt] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [contactText, setContactText] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -135,7 +135,7 @@ export function PaymentClaimPage() {
             <select
               id="payment-product"
               value={productId}
-              onChange={(event) => setProductId(event.target.value as ProductId)}
+              onChange={(event) => setProductId(event.target.value as CourseProductId)}
             >
               {CLAIMABLE_PRODUCTS.map((product: Product) => (
                 <option key={product.id} value={product.id}>
@@ -189,4 +189,3 @@ export function PaymentClaimPage() {
     </section>
   );
 }
-

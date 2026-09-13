@@ -1,13 +1,32 @@
 import { z } from 'zod';
+import { PRODUCT_IDS, type SiteProductId } from './products';
 
-export const ProductIdSchema = z.enum(['super', 'anbu', 'bundle']);
-export type ProductId = z.infer<typeof ProductIdSchema>;
+export * from './money';
+export * from './identity';
+export * from './products';
+
+export const ProductIdSchema = z.enum(PRODUCT_IDS);
+export type ProductId = SiteProductId;
+
+export const CourseProductIdSchema = z.enum(['super', 'anbu', 'bundle']);
+export type CourseProductId = z.infer<typeof CourseProductIdSchema>;
+
+export const ProductTypeSchema = z.enum([
+  'course',
+  'membership',
+  'partner_opening',
+  'digital',
+  'service',
+  'other'
+]);
+export type ProductType = z.infer<typeof ProductTypeSchema>;
 
 export const ProductStatusSchema = z.enum(['active', 'presale', 'coming_soon']);
 export const ProductSchema = z.object({
   id: ProductIdSchema,
   title: z.string().min(1),
   priceYuan: z.number().int().min(0),
+  productType: ProductTypeSchema,
   status: ProductStatusSchema,
   categoryId: z.string().min(1),
   description: z.string().min(1)

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CATALOG, type ProductId } from '@site/contracts';
+import { CATALOG, type CourseProductId, type ProductId } from '@site/contracts';
 import { AUTH_EXPIRED_EVENT, ApiError, apiFetch, apiUrl, clearSessionToken, getSessionToken } from '../../lib/api';
 
 type OrderStatus = 'pending' | 'approved' | 'rejected';
@@ -43,8 +43,12 @@ function formatYuan(value: number | null | undefined): string {
   return `${value.toLocaleString('zh-CN')} 元`;
 }
 
+function isCourseProductId(productId: ProductId): productId is CourseProductId {
+  return productId in CATALOG.products;
+}
+
 function productTitle(productId: ProductId): string {
-  return CATALOG.products[productId]?.title ?? productId;
+  return isCourseProductId(productId) ? CATALOG.products[productId].title : productId;
 }
 
 function toDateTimeLocalValue(timestamp: number): string {

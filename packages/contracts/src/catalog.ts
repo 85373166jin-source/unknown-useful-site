@@ -1,4 +1,4 @@
-import type { Lesson, Product, Series } from './index';
+import type { CourseProductId, Lesson, Product, Series } from './index';
 
 export type Category = {
   id: string;
@@ -6,7 +6,7 @@ export type Category = {
 };
 
 export type Catalog = {
-  products: Record<'super' | 'anbu' | 'bundle', Product>;
+  products: Record<CourseProductId, Product>;
   series: Record<'super' | 'anbu', Series>;
   categories: readonly Category[];
 };
@@ -28,6 +28,7 @@ export const CATALOG = {
       id: 'super',
       title: '超影课程',
       priceYuan: 29,
+      productType: 'course',
       status: 'active',
       categoryId: 'courses',
       description: '9 个视频、在线播放、下载、进度同步'
@@ -36,6 +37,7 @@ export const CATALOG = {
       id: 'anbu',
       title: '暗部课程',
       priceYuan: 29,
+      productType: 'course',
       status: 'coming_soon',
       categoryId: 'courses',
       description: '素材到位后配置视频与课程密码'
@@ -44,6 +46,7 @@ export const CATALOG = {
       id: 'bundle',
       title: '火影合集',
       priceYuan: 49,
+      productType: 'course',
       status: 'presale',
       categoryId: 'courses',
       description: '超影课程权益加暗部课程权益'
