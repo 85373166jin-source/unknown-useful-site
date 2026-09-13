@@ -8,7 +8,7 @@
 - 第一版只支持纯文本，长度 1 到 1000 字。
 - `comments.status` 只能是 `pending`、`public`、`rejected`、`author_only`。
 - 普通/VIP 创建为 `pending`，作者可见“审核中”，审核通过后公开。
-- SVIP 创建时按 10 分钟窗口计算：前 3 条为 `public`，第 4 条及以后为 `author_only`，`visible_until = created_at + 1 小时`。
+- SVIP 创建时按固定 10 分钟窗口原子计数：前 3 条为 `public`，第 4 条及以后为 `author_only`，`visible_until = created_at + 1 小时`；窗口边界允许产生短暂跨窗口连续公开。
 - `author_only` 对其他用户不可见，不显示隐藏/刷屏/失败字样，不进入人工审核队列。
 - 公开评论只允许删除，不提供隐藏或恢复。
 - 评论用户名旁按当前有效会员动态显示 VIP/SVIP 和剩余天数；管理员显示“合作管理员”。
