@@ -1,7 +1,9 @@
 import type { MiddlewareHandler } from 'hono';
+import { type PermissionRole } from '@site/contracts';
 import type { Env } from '../env';
 import { findActiveSessionByTokenHash } from '../repositories/sessions';
-import { findUserById, type UserRole } from '../repositories/users';
+import { findUserById } from '../repositories/users';
+import { effectivePermissionRole } from '../services/identity';
 import { hashSessionToken } from '../services/session';
 import { ApiError } from './error';
 
@@ -9,7 +11,7 @@ export type AppEnv = {
   Bindings: Env;
   Variables: {
     userId: string;
-    role: UserRole;
+    role: PermissionRole;
     sessionTokenHash: string;
   };
 };
@@ -33,14 +35,22 @@ export const bearerAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   }
 
   c.set('userId', user.id);
-  c.set('role', user.role === 'admin' ? 'admin' : 'user');
+  c.set('role', effectivePermissionRole(user.permission_role));
   c.set('sessionTokenHash', tokenHash);
   await next();
 };
 
 export const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (c.get('role') !== 'admin') {
+  const role = c.get('role');
+  if (role !== 'admin' && role !== 'owner') {
     throw new ApiError('forbidden', 'Admin access required', 403);
+  }
+  await next();
+};
+
+export const requireOwner: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get('role') !== 'owner') {
+    throw new ApiError('forbidden', 'Owner access required', 403);
   }
   await next();
 };

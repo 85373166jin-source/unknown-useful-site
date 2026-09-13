@@ -1,4 +1,5 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+import { type MembershipTier, type PermissionRole } from '@site/contracts';
 
 export type UserRole = 'user' | 'admin';
 export type UserStatus = 'active' | 'disabled';
@@ -9,6 +10,9 @@ export interface UserRow {
   username: string;
   password_hash: string;
   role: UserRole;
+  permission_role: PermissionRole;
+  membership_tier: MembershipTier;
+  membership_expires_at: number | null;
   status: UserStatus;
   phone_hmac: string | null;
   phone_mask: string | null;
@@ -33,6 +37,9 @@ const USER_COLUMNS = [
   'username',
   'password_hash',
   'role',
+  'permission_role',
+  'membership_tier',
+  'membership_expires_at',
   'status',
   'phone_hmac',
   'phone_mask',
@@ -92,6 +99,18 @@ export function buildUpdateUserPasswordStatement(
     updatedAt,
     userId
   );
+}
+
+export function buildUpdateUserMembershipStatement(
+  db: D1Database,
+  userId: string,
+  tier: MembershipTier,
+  expiresAt: number | null,
+  updatedAt: number
+): D1PreparedStatement {
+  return db
+    .prepare('UPDATE users SET membership_tier = ?, membership_expires_at = ?, updated_at = ? WHERE id = ?')
+    .bind(tier, expiresAt, updatedAt, userId);
 }
 
 export function buildBindUserContactStatement(
@@ -161,6 +180,16 @@ export async function updateUserPassword(
   updatedAt: number
 ): Promise<void> {
   await buildUpdateUserPasswordStatement(db, userId, passwordHash, updatedAt).run();
+}
+
+export async function updateUserMembership(
+  db: D1Database,
+  userId: string,
+  tier: MembershipTier,
+  expiresAt: number | null,
+  updatedAt: number
+): Promise<void> {
+  await buildUpdateUserMembershipStatement(db, userId, tier, expiresAt, updatedAt).run();
 }
 
 export async function bindUserContact(

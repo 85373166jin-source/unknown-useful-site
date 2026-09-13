@@ -1,5 +1,6 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { Env } from '../env';
+import { type MembershipTier, type PermissionRole } from '@site/contracts';
 import { ApiError } from '../middleware/error';
 import {
   buildBindUserContactStatement,
@@ -24,6 +25,8 @@ import { issueSessionToken, sessionExpiresAt } from './session';
 import { classifyLoginRisk, type LoginSignal, type RiskLevel } from './risk';
 import { consumeRateLimit } from './rate-limit';
 import { recordAudit } from './audit';
+import { effectivePermissionRole } from './identity';
+import { effectiveMembership, membershipRemainingDays } from './membership';
 
 export const USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,32}$/;
 export const PASSWORD_MIN_LENGTH = 8;
@@ -39,6 +42,10 @@ export interface PublicUser {
   id: string;
   username: string;
   role: UserRole;
+  permissionRole: PermissionRole;
+  membershipTier: MembershipTier;
+  membershipExpiresAt: number | null;
+  membershipRemainingDays: number;
   phoneMask: string | null;
   emailMask: string | null;
   createdAt: number;
@@ -81,11 +88,17 @@ export interface AccountPatchInput {
   email?: string | undefined;
 }
 
-function toPublicUser(user: UserRow): PublicUser {
+function toPublicUser(user: UserRow, now: number = Date.now()): PublicUser {
+  const membership = { tier: user.membership_tier, expiresAt: user.membership_expires_at };
+  const effective = effectiveMembership(membership, now);
   return {
     id: user.id,
     username: user.username,
     role: user.role === 'admin' ? 'admin' : 'user',
+    permissionRole: effectivePermissionRole(user.permission_role),
+    membershipTier: effective.tier,
+    membershipExpiresAt: effective.expiresAt,
+    membershipRemainingDays: membershipRemainingDays(membership, now),
     phoneMask: user.phone_mask,
     emailMask: user.email_mask,
     createdAt: user.created_at
@@ -277,7 +290,7 @@ export async function register(env: Env, input: RegisterInput): Promise<AuthSess
     after: { username: user.username }
   });
 
-  return { token: session.token, user: toPublicUser(user) };
+  return { token: session.token, user: toPublicUser(user, now) };
 }
 
 export async function login(env: Env, input: LoginInput): Promise<LoginResult> {
@@ -343,7 +356,7 @@ export async function login(env: Env, input: LoginInput): Promise<LoginResult> {
     after: { riskLevel }
   });
 
-  return { token: session.token, user: toPublicUser(user), riskLevel };
+  return { token: session.token, user: toPublicUser(user, now), riskLevel };
 }
 
 export async function logout(env: Env, tokenHash: string, userId: string): Promise<void> {
@@ -420,7 +433,7 @@ export async function getPublicUser(env: Env, userId: string): Promise<PublicUse
   if (!user) {
     throw new ApiError('unauthorized', 'Account is not available', 401);
   }
-  return toPublicUser(user);
+  return toPublicUser(user, Date.now());
 }
 
 export async function updateAccount(
@@ -522,7 +535,7 @@ export async function updateAccount(
     after: { phoneMask: updated.phone_mask, emailMask: updated.email_mask }
   });
 
-  return toPublicUser(updated);
+  return toPublicUser(updated, now);
 }
 
 export async function deleteContact(env: Env, userId: string, kind: ContactKind): Promise<PublicUser> {

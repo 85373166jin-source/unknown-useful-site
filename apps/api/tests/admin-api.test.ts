@@ -105,8 +105,8 @@ async function seedAdmin(): Promise<string> {
   const adminHash = await hashPassword('admin-password-123');
   const now = Date.now();
   await env.DB.prepare(
-    `INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at)
-     VALUES ('admin-1', 'admin-1', ?, 'admin', 'active', ?, ?)`
+    `INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at)
+     VALUES ('admin-1', 'admin-1', ?, 'admin', 'owner', 'active', ?, ?)`
   )
     .bind(adminHash, now, now)
     .run();

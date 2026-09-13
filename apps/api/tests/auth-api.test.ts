@@ -96,6 +96,23 @@ describe('authentication API', () => {
     expect(newSession.status).toBe(200);
   });
 
+  it('returns permission and effective membership fields on the public user', async () => {
+    const register = await registerUser({ username: 'alice', password: 'long-password-123' });
+    expect(register.status).toBe(201);
+    const { token } = (await register.json()) as { token: string };
+
+    const me = await app.request('/api/v1/auth/me', { headers: authHeaders(token) }, env);
+    expect(me.status).toBe(200);
+    const body = (await me.json()) as { user: Record<string, unknown> };
+
+    expect(body.user).toMatchObject({
+      permissionRole: 'user',
+      membershipTier: 'normal',
+      membershipExpiresAt: null,
+      membershipRemainingDays: 0
+    });
+  });
+
   it('validates username and password during registration', async () => {
     await expectError(await registerUser({ username: 'ab', password: 'long-password-123' }), 400, 'invalid_username');
     await expectError(await registerUser({ username: 'alice!', password: 'long-password-123' }), 400, 'invalid_username');
@@ -590,7 +607,7 @@ describe('authentication API', () => {
     const adminHash = await hashPassword('admin-password-123');
     const now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('admin-1', 'admin-1', ?, 'admin', 'active', ?, ?)"
+      "INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at) VALUES ('admin-1', 'admin-1', ?, 'admin', 'owner', 'active', ?, ?)"
     )
       .bind(adminHash, now, now)
       .run();
