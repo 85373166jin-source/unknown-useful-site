@@ -352,3 +352,8 @@ button:disabled {
   color: #a36a00;
   border-color: rgba(233, 168, 0, 0.4);
 }
+
+.home-free-comments {
+  margin-top: var(--space-6);
+}
+

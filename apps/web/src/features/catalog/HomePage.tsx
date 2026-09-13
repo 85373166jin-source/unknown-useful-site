@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CATALOG, type Category } from '@site/contracts';
 import { apiFetch } from '../../lib/api';
 import { ResourceCard, type Resource } from '../../components/ResourceCard';
+import { ProductComments } from '../comments/ProductComments';
 
 const RESOURCES: Resource[] = [
   {
@@ -91,6 +92,10 @@ export function HomePage() {
           ))}
         </div>
       </div>
+
+      <section className="home-free-comments">
+        <ProductComments productId="free" title="免费资源专区评论" />
+      </section>
     </div>
   );
 }

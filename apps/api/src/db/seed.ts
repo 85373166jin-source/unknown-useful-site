@@ -15,6 +15,18 @@ const membershipProducts = [
   { id: 'svip_monthly', title: 'SVIP 豪华会员', priceCents: 1990, productType: 'membership' }
 ] as const;
 
+// Free resource product that backs the homepage 免费资源专区 comment surface.
+// It is intentionally not part of the claimable ProductId enum, so payments are unaffected.
+const freeProduct = {
+  id: 'free',
+  title: '免费资源专区',
+  priceCents: 0,
+  productType: 'other',
+  categoryId: 'free',
+  sortOrder: 6,
+  description: '免费工具与学习资料整理中'
+} as const;
+
 export async function seedCatalogAndAdmin(env: Env): Promise<void> {
   const now = Date.now();
 
@@ -126,6 +138,35 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
       )
       .run();
   }
+
+  await env.DB.prepare(
+    `INSERT INTO products
+      (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      price_yuan = excluded.price_yuan,
+      price_cents = excluded.price_cents,
+      product_type = excluded.product_type,
+      status = excluded.status,
+      category_id = excluded.category_id,
+      sort_order = excluded.sort_order,
+      description = excluded.description,
+      updated_at = excluded.updated_at`
+  )
+    .bind(
+      freeProduct.id,
+      freeProduct.title,
+      Math.round(freeProduct.priceCents / 100),
+      freeProduct.priceCents,
+      freeProduct.productType,
+      freeProduct.categoryId,
+      freeProduct.sortOrder,
+      freeProduct.description,
+      now,
+      now
+    )
+    .run();
 
   await env.DB.prepare(
     `INSERT INTO users (id, username, password_hash, role, permission_role, status, created_at, updated_at)
