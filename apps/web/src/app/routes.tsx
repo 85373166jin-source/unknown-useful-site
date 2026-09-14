@@ -9,6 +9,7 @@ import { LessonPage } from '../features/courses/LessonPage';
 import { StaticContentPage } from '../features/content/StaticContentPage';
 import { MembershipPage } from '../features/membership/MembershipPage';
 import { ContributionPage } from '../features/account/ContributionPage';
+import { WalletPage } from '../features/account/WalletPage';
 import { AuthProvider } from '../lib/auth-context';
 import { PublicApp } from './PublicApp';
 
@@ -42,6 +43,7 @@ export function PublicRoutes() {
             <Route path="/contact" element={<StaticContentPage pageKey="contact" />} />
             <Route path="/courses/fire-shadow" element={<CoursePage />} />
             <Route path="/contribute" element={<ContributionPage />} />
+            <Route path="/wallet" element={<WalletPage />} />
             <Route
               path="/learn/:seriesId/:lessonId"
               element={
