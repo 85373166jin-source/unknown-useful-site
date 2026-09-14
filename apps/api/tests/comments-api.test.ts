@@ -54,9 +54,9 @@ async function seedProduct(productId = 'super', productType = 'course'): Promise
   await env.DB.prepare(
     `INSERT INTO products
       (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at)
-     VALUES (?, ?, 29, 2900, 'course', 'active', 'courses', 1, '', ?, ?)`
+     VALUES (?, ?, 29, 2900, ?, 'active', 'courses', 1, '', ?, ?)`
   )
-    .bind(productId, productId, now, now)
+    .bind(productId, productId, productType, now, now)
     .run();
 }
 
