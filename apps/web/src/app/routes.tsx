@@ -10,6 +10,7 @@ import { StaticContentPage } from '../features/content/StaticContentPage';
 import { MembershipPage } from '../features/membership/MembershipPage';
 import { ContributionPage } from '../features/account/ContributionPage';
 import { WalletPage } from '../features/account/WalletPage';
+import { NotificationsPage } from '../features/account/NotificationsPage';
 import { AuthProvider } from '../lib/auth-context';
 import { PublicApp } from './PublicApp';
 
@@ -44,6 +45,7 @@ export function PublicRoutes() {
             <Route path="/courses/fire-shadow" element={<CoursePage />} />
             <Route path="/contribute" element={<ContributionPage />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route
               path="/learn/:seriesId/:lessonId"
               element={

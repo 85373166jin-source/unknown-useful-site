@@ -205,6 +205,7 @@ export function AccountPage() {
         </section>
 
         <SubsitePanel />
+        <section className="card account-identity-block"><h2>站内通知</h2><p>查看收益、投稿审核和提现状态通知。</p><Link className="button" to="/notifications">查看通知</Link></section>
         <section className="card account-identity-block"><h2>我的余额</h2><p>查看分站收益、投稿收益和提现记录。</p><Link className="button" to="/wallet">进入我的余额</Link></section>
         <section className="card account-identity-block"><h2>合作投稿</h2><p>上传图片、视频或 ZIP 投稿，审核通过后可进入素材库。</p><Link className="button" to="/contribute">进入合作投稿</Link></section>
       </div>
