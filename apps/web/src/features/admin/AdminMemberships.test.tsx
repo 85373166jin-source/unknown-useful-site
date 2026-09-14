@@ -14,6 +14,7 @@ const membershipExpiry = new Date('2030-01-01T00:00:00').getTime();
 const alice = {
   id: 'user-1',
   username: 'alice',
+  displayName: 'Alice展示名',
   role: 'user' as const,
   status: 'active' as const,
   phoneMask: '138****0000',
@@ -31,6 +32,7 @@ const bob = {
   ...alice,
   id: 'user-2',
   username: 'bob',
+  displayName: 'Bob展示名',
   membershipTier: 'normal' as const,
   membershipExpiresAt: null,
   membershipRemainingDays: 0

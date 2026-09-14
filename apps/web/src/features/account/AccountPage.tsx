@@ -33,6 +33,7 @@ export function AccountPage() {
   const { user, logout, updateAccount, clearSession } = useAuth();
   const navigate = useNavigate();
 
+  const [displayName, setDisplayName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -53,6 +54,22 @@ export function AccountPage() {
       ? null
       : formatCreatedAt(user.membershipExpiresAt);
   const partnerLevel: PartnerLevel = user.partnerLevel ?? DEFAULT_PARTNER_LEVEL;
+
+  async function handleDisplayNameUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotice(null);
+    setError(null);
+    setBusy(true);
+    try {
+      await updateAccount({ displayName });
+      setDisplayName('');
+      setNotice('展示用户名已更新');
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -133,8 +150,12 @@ export function AccountPage() {
         <h2>账号资料</h2>
         <dl className="account-facts">
           <div>
-            <dt>用户名</dt>
+            <dt>账号</dt>
             <dd>{user.username}</dd>
+          </div>
+          <div>
+            <dt>展示用户名</dt>
+            <dd>{user.displayName}</dd>
           </div>
           <div>
             <dt>注册时间</dt>
@@ -199,6 +220,26 @@ export function AccountPage() {
       ) : null}
 
       <div className="card">
+        <h2>展示用户名</h2>
+        <form className="form" onSubmit={handleDisplayNameUpdate}>
+          <div className="field">
+            <label htmlFor="account-display-name">新展示用户名</label>
+            <input
+              id="account-display-name"
+              name="displayName"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder={user.displayName}
+              required
+            />
+          </div>
+          <button type="submit" className="button" disabled={busy}>
+            保存展示用户名
+          </button>
+        </form>
+      </div>
+
+      <div className="card">
         <h2>修改密码</h2>
         <form className="form" onSubmit={handlePasswordChange}>
           <div className="field">
@@ -257,13 +298,13 @@ export function AccountPage() {
       </div>
 
       <div className="card">
-        <h2>已拥有课程</h2>
-        <p className="empty-state">暂无已拥有课程</p>
+        <h2>已付费项目</h2>
+        <p className="empty-state">暂无已付费项目</p>
       </div>
 
       <div className="card">
-        <h2>付款申请状态</h2>
-        <p className="empty-state">暂无付款申请</p>
+        <h2>待审核项目</h2>
+        <p className="empty-state">暂无待审核项目</p>
       </div>
     </section>
   );

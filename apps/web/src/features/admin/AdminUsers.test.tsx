@@ -12,6 +12,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
 const baseUser = {
   id: 'user-1',
   username: 'alice',
+  displayName: 'Alice展示名',
   role: 'user' as const,
   status: 'active' as const,
   phoneMask: '138****0000',

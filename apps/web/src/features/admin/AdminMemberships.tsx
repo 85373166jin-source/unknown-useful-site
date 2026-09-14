@@ -8,6 +8,7 @@ type RiskLevel = 'none' | 'warn' | 'strong_warn';
 interface AdminUser {
   id: string;
   username: string;
+  displayName: string;
   role: 'user' | 'admin';
   status: UserStatus;
   phoneMask: string | null;
@@ -81,7 +82,7 @@ export function AdminMemberships() {
     if (!normalizedQuery) {
       return true;
     }
-    return [user.username, user.phoneMask ?? '', user.emailMask ?? ''].some((value) =>
+    return [user.username, user.displayName ?? user.username, user.phoneMask ?? '', user.emailMask ?? ''].some((value) =>
       value.toLowerCase().includes(normalizedQuery)
     );
   });
@@ -174,7 +175,7 @@ export function AdminMemberships() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="用户名、手机号或邮箱"
+            placeholder="账号、展示用户名、手机号或邮箱"
           />
         </div>
       </div>
@@ -184,7 +185,8 @@ export function AdminMemberships() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>用户名</th>
+                <th>账号</th>
+                <th>展示用户名</th>
                 <th>会员等级</th>
                 <th>到期时间</th>
                 <th>剩余天数</th>
@@ -195,6 +197,7 @@ export function AdminMemberships() {
               {filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td>{user.username}</td>
+                  <td>{user.displayName}</td>
                   <td>{MEMBERSHIP_TIER_LABELS[user.membershipTier]}</td>
                   <td>
                     {user.membershipExpiresAt === null

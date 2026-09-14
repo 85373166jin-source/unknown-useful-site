@@ -15,6 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
 const user: AuthUser = {
   id: 'user-1',
   username: 'alice',
+  displayName: '公开昵称',
   role: 'user',
   permissionRole: 'user',
   membershipTier: 'vip',
@@ -50,6 +51,10 @@ describe('AccountPage', () => {
       </TestProviders>
     );
 
+    expect(screen.getByText('账号')).toBeInTheDocument();
+    expect(screen.getAllByText('展示用户名').length).toBeGreaterThan(0);
+    expect(screen.getByText('已付费项目')).toBeInTheDocument();
+    expect(screen.getByText('待审核项目')).toBeInTheDocument();
     expect(screen.getByText('身份角色')).toBeInTheDocument();
     expect(screen.getByText('会员等级')).toBeInTheDocument();
     expect(screen.getByText('合作等级')).toBeInTheDocument();

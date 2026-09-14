@@ -15,6 +15,7 @@ function authUser(id: string, overrides: Partial<AuthUser> = {}): AuthUser {
   return {
     id,
     username: id,
+    displayName: overrides.displayName ?? id,
     role: 'user',
     permissionRole: 'user',
     membershipTier: 'normal',

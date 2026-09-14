@@ -8,6 +8,7 @@ type UserStatus = 'active' | 'disabled';
 interface AdminUser {
   id: string;
   username: string;
+  displayName: string;
   role: 'user' | 'admin';
   status: UserStatus;
   phoneMask: string | null;
@@ -75,7 +76,7 @@ export function AdminUsers() {
     if (!normalizedQuery) {
       return true;
     }
-    return [user.username, user.phoneMask ?? '', user.emailMask ?? ''].some((value) =>
+    return [user.username, user.displayName ?? user.username, user.phoneMask ?? '', user.emailMask ?? ''].some((value) =>
       value.toLowerCase().includes(normalizedQuery)
     );
   });
@@ -214,7 +215,7 @@ export function AdminUsers() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="用户名、手机号或邮箱"
+            placeholder="账号、展示用户名、手机号或邮箱"
           />
         </div>
         <div className="field">
@@ -282,7 +283,8 @@ export function AdminUsers() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>用户名</th>
+                <th>账号</th>
+                <th>展示用户名</th>
                 <th>角色</th>
                 <th>状态</th>
                 <th>手机号</th>
@@ -297,6 +299,7 @@ export function AdminUsers() {
               {filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td>{user.username}</td>
+                  <td>{user.displayName}</td>
                   <td>{user.role === 'admin' ? '管理员' : '用户'}</td>
                   <td>{user.status === 'active' ? '正常' : '已禁用'}</td>
                   <td>{user.phoneMask ?? '未绑定'}</td>

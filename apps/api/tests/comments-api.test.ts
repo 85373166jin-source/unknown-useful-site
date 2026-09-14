@@ -622,3 +622,39 @@ describe('comments moderation API', () => {
     );
   });
 });
+
+
+describe('comment display names', () => {
+  beforeEach(async () => {
+    await resetTestDatabase(env.DB);
+    await seedProduct();
+  });
+
+  it('shows the public display name instead of the login account', async () => {
+    const register = await app.request(
+      '/api/v1/auth/register',
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          username: 'account-commenter',
+          displayName: '公开昵称',
+          password: 'long-password-123'
+        })
+      },
+      env
+    );
+    expect(register.status).toBe(201);
+    const session = await register.json<{ token: string }>();
+    const created = await postComment(session.token, '展示名评论');
+    expect(created.status).toBe(201);
+
+    const authorView = await app.request(
+      '/api/v1/products/super/comments',
+      { headers: authHeaders(session.token) },
+      env
+    );
+    const body = await authorView.json<CommentsResponse>();
+    expect(body.comments[0]?.author.username).toBe('公开昵称');
+  });
+});

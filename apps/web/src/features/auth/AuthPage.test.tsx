@@ -47,7 +47,7 @@ function renderLogin(initialEntry: string): void {
     </TestProviders>
   );
 
-  fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'alice' } });
+  fireEvent.change(screen.getByLabelText('账号'), { target: { value: 'alice' } });
   fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'password-123' } });
   fireEvent.click(screen.getByRole('button', { name: '登录' }));
 }
@@ -56,7 +56,8 @@ describe('AuthPage', () => {
   it('renders registration fields with the exact labels', () => {
     render(<AuthPage mode="register" />, { wrapper: MemoryRouter });
 
-    expect(screen.getByLabelText('用户名')).toBeInTheDocument();
+    expect(screen.getByLabelText('账号')).toBeInTheDocument();
+    expect(screen.getByLabelText('展示用户名')).toBeInTheDocument();
     expect(screen.getByLabelText('密码')).toBeInTheDocument();
     expect(screen.getByLabelText('手机号（选填）')).toBeInTheDocument();
     expect(screen.getByLabelText('邮箱（选填）')).toBeInTheDocument();

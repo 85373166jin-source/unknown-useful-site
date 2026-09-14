@@ -21,6 +21,23 @@ describe('database schema', () => {
     const indexes = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_comments_visible_until'").all<{ name: string }>();
     expect(indexes.results?.map((row) => row.name)).toEqual(['idx_comments_visible_until']);
   });
+  it('requires unique case-insensitive display names', async () => {
+    await env.DB.prepare(
+      "INSERT INTO users (id, username, display_name, password_hash, role, status, created_at, updated_at) VALUES ('u1', 'account-a', 'Alice', 'hash', 'user', 'active', 1, 1)"
+    ).run();
+
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO users (id, username, display_name, password_hash, role, status, created_at, updated_at) VALUES ('u2', 'account-b', 'alice', 'hash', 'user', 'active', 1, 1)"
+      ).run()
+    ).rejects.toThrow(/UNIQUE/i);
+
+    const index = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_display_name_nocase'"
+    ).first<{ name: string }>();
+    expect(index?.name).toBe('idx_users_display_name_nocase');
+  });
+
   it('enforces one active entitlement per user and product', async () => {
     await env.DB.prepare("INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('u1', 'u1', 'hash', 'user', 'active', 1, 1)").run();
     await env.DB.prepare("INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, created_at, updated_at) VALUES ('super', '超影课程', 29, 'active', 'courses', 1, 1, 1)").run();

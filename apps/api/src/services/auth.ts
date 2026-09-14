@@ -1,11 +1,17 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { Env } from '../env';
-import { type MembershipTier, type PermissionRole } from '@site/contracts';
+import {
+  DISPLAY_NAME_MAX_LENGTH,
+  DISPLAY_NAME_MIN_LENGTH,
+  type MembershipTier,
+  type PermissionRole
+} from '@site/contracts';
 import { ApiError } from '../middleware/error';
 import {
   buildBindUserContactStatement,
   buildInsertUserStatement,
   buildUnbindUserContactStatement,
+  buildUpdateUserDisplayNameStatement,
   buildUpdateUserPasswordStatement,
   findUserByContactHmac,
   findUserById,
@@ -41,6 +47,7 @@ export const RECOVERY_IP_LIMIT = 20;
 export interface PublicUser {
   id: string;
   username: string;
+  displayName: string;
   role: UserRole;
   permissionRole: PermissionRole;
   membershipTier: MembershipTier;
@@ -62,6 +69,7 @@ export interface LoginResult extends AuthSession {
 
 export interface RegisterInput {
   username: string;
+  displayName?: string | undefined;
   password: string;
   phone?: string | undefined;
   email?: string | undefined;
@@ -83,6 +91,7 @@ export interface RecoverInput {
 }
 
 export interface AccountPatchInput {
+  displayName?: string | undefined;
   newPassword?: string | undefined;
   phone?: string | undefined;
   email?: string | undefined;
@@ -94,6 +103,7 @@ function toPublicUser(user: UserRow, now: number = Date.now()): PublicUser {
   return {
     id: user.id,
     username: user.username,
+    displayName: user.display_name ?? user.username,
     role: user.role === 'admin' ? 'admin' : 'user',
     permissionRole: effectivePermissionRole(user.permission_role),
     membershipTier: effective.tier,
@@ -112,6 +122,25 @@ function assertValidUsername(username: string): void {
       'Username must be 3-32 characters using letters, numbers, underscores, or hyphens'
     );
   }
+}
+
+function normalizeDisplayName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function assertValidDisplayName(value: string): string {
+  const normalized = normalizeDisplayName(value);
+  if (
+    normalized.length < DISPLAY_NAME_MIN_LENGTH ||
+    normalized.length > DISPLAY_NAME_MAX_LENGTH ||
+    /[\u0000-\u001f\u007f]/.test(normalized)
+  ) {
+    throw new ApiError(
+      'invalid_display_name',
+      `Display name must be ${DISPLAY_NAME_MIN_LENGTH}-${DISPLAY_NAME_MAX_LENGTH} visible characters`
+    );
+  }
+  return normalized;
 }
 
 function assertValidPassword(password: string): void {
@@ -146,6 +175,9 @@ function mapUniqueConstraintError(error: unknown): never {
   const field = match?.[1];
   if (field === 'username') {
     throw new ApiError('duplicate_username', 'Username is already taken', 409);
+  }
+  if (field === 'display_name') {
+    throw new ApiError('duplicate_display_name', 'Display name is already taken', 409);
   }
   if (field === 'phone_hmac' || field === 'email_hmac') {
     throw new ApiError('duplicate_contact', 'Contact is already bound to another account', 409);
@@ -207,6 +239,7 @@ async function listLoginSignals(db: D1Database, userId: string, since: number): 
 export async function register(env: Env, input: RegisterInput): Promise<AuthSession> {
   const username = input.username.trim();
   assertValidUsername(username);
+  const displayName = assertValidDisplayName(input.displayName ?? username);
   assertValidPassword(input.password);
 
   const now = Date.now();
@@ -256,6 +289,7 @@ export async function register(env: Env, input: RegisterInput): Promise<AuthSess
       buildInsertUserStatement(env.DB, {
         id: userId,
         username,
+        displayName,
         passwordHash,
         role: 'user',
         phone: {
@@ -451,10 +485,18 @@ export async function updateAccount(
     assertValidPassword(input.newPassword);
   }
 
-  const before = { phoneMask: user.phone_mask, emailMask: user.email_mask };
+  const before = {
+    displayName: user.display_name ?? user.username,
+    phoneMask: user.phone_mask,
+    emailMask: user.email_mask
+  };
   const passwordHash = input.newPassword !== undefined ? await hashPassword(input.newPassword) : null;
 
   const statements: D1PreparedStatement[] = [];
+  if (input.displayName !== undefined) {
+    const displayName = assertValidDisplayName(input.displayName);
+    statements.push(buildUpdateUserDisplayNameStatement(env.DB, userId, displayName, now));
+  }
   if (passwordHash) {
     statements.push(buildUpdateUserPasswordStatement(env.DB, userId, passwordHash, now));
     statements.push(buildDeleteAllSessionsStatement(env.DB, userId));
@@ -532,7 +574,11 @@ export async function updateAccount(
     entityType: 'user',
     entityId: userId,
     before,
-    after: { phoneMask: updated.phone_mask, emailMask: updated.email_mask }
+    after: {
+      displayName: updated.display_name ?? updated.username,
+      phoneMask: updated.phone_mask,
+      emailMask: updated.email_mask
+    }
   });
 
   return toPublicUser(updated, now);

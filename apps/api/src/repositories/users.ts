@@ -8,6 +8,7 @@ export type ContactKind = 'phone' | 'email';
 export interface UserRow {
   id: string;
   username: string;
+  display_name: string | null;
   password_hash: string;
   role: UserRole;
   permission_role: PermissionRole;
@@ -35,6 +36,7 @@ export interface ContactRecord {
 const USER_COLUMNS = [
   'id',
   'username',
+  'display_name',
   'password_hash',
   'role',
   'permission_role',
@@ -56,6 +58,7 @@ const USER_COLUMNS = [
 export interface CreateUserInput {
   id: string;
   username: string;
+  displayName: string;
   passwordHash: string;
   role: UserRole;
   phone: ContactRecord;
@@ -67,14 +70,15 @@ export interface CreateUserInput {
 export function buildInsertUserStatement(db: D1Database, input: CreateUserInput): D1PreparedStatement {
   return db.prepare(
     `INSERT INTO users (
-      id, username, password_hash, role, status,
+      id, username, display_name, password_hash, role, status,
       phone_hmac, phone_mask, phone_bound_at,
       email_hmac, email_mask, email_bound_at,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.id,
     input.username,
+    input.displayName,
     input.passwordHash,
     input.role,
     input.phone.hmac,
@@ -220,6 +224,30 @@ export async function createUser(db: D1Database, input: CreateUserInput): Promis
   return created;
 }
 
+export function buildUpdateUserDisplayNameStatement(
+  db: D1Database,
+  userId: string,
+  displayName: string,
+  updatedAt: number
+): D1PreparedStatement {
+  return db
+    .prepare('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?')
+    .bind(displayName, updatedAt, userId);
+}
+
+export async function updateUserDisplayName(
+  db: D1Database,
+  userId: string,
+  displayName: string,
+  updatedAt: number
+): Promise<UserRow | null> {
+  await db
+    .prepare('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?')
+    .bind(displayName, updatedAt, userId)
+    .run();
+  return findUserById(db, userId);
+}
+
 export async function updateUserPassword(
   db: D1Database,
   userId: string,
@@ -264,6 +292,7 @@ export async function unbindUserContact(
 export interface AdminUserRow {
   id: string;
   username: string;
+  display_name: string | null;
   role: UserRole;
   status: UserStatus;
   phone_mask: string | null;
@@ -282,7 +311,7 @@ export interface LoginEventRow {
   at: number;
 }
 
-const ADMIN_USER_COLUMNS = 'id, username, role, status, phone_mask, email_mask, membership_tier, membership_expires_at, created_at, updated_at';
+const ADMIN_USER_COLUMNS = 'id, username, display_name, role, status, phone_mask, email_mask, membership_tier, membership_expires_at, created_at, updated_at';
 
 export async function listAllUsersForAdmin(db: D1Database): Promise<AdminUserRow[]> {
   const result = await db

@@ -35,7 +35,7 @@ it('replaces the previous session on a new login', async () => {
   const register = await app.request('/api/v1/auth/register', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password: 'long-password-123' })
+    body: JSON.stringify({ username, displayName: '安全问题用户', password: 'long-password-123' })
   }, env);
   expect(register.status).toBe(201);
   const first = await register.json<{ token: string }>();

@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const PermissionRoleSchema = z.enum(['user', 'admin', 'owner']);
 export const MembershipTierSchema = z.enum(['normal', 'vip', 'svip']);
+export const DISPLAY_NAME_MIN_LENGTH = 2;
+export const DISPLAY_NAME_MAX_LENGTH = 20;
 export const PartnerLevelSchema = z.enum(['none', 'basic', 'advanced', 'top']);
 
 export type PermissionRole = z.infer<typeof PermissionRoleSchema>;

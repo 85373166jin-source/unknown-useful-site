@@ -22,6 +22,7 @@ export type AuthRole = 'user' | 'admin';
 export interface AuthUser {
   id: string;
   username: string;
+  displayName: string;
   role: AuthRole;
   permissionRole: PermissionRole;
   membershipTier: MembershipTier;
@@ -40,6 +41,7 @@ export interface LoginInput {
 
 export interface RegisterInput {
   username: string;
+  displayName?: string | undefined;
   password: string;
   phone?: string | undefined;
   email?: string | undefined;
@@ -52,6 +54,7 @@ export interface RecoverInput {
 }
 
 export interface AccountPatchInput {
+  displayName?: string | undefined;
   newPassword?: string | undefined;
   phone?: string | undefined;
   email?: string | undefined;

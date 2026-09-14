@@ -13,6 +13,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 type AuthUser = {
   id: string;
   username: string;
+  displayName: string;
   role: 'user' | 'admin';
   phoneMask: string | null;
   emailMask: string | null;
@@ -169,7 +170,7 @@ describe('authentication API', () => {
     for (const response of responses) {
       if (response.status === 409) {
         const body = (await response.json()) as ErrorBody;
-        expect(['duplicate_username', 'duplicate_contact']).toContain(body.error.code);
+        expect(['duplicate_username', 'duplicate_display_name', 'duplicate_contact']).toContain(body.error.code);
       }
     }
   });
@@ -638,3 +639,47 @@ describe('authentication API', () => {
   });
 });
 
+
+
+describe('display names API', () => {
+  beforeEach(async () => {
+    await resetTestDatabase(env.DB);
+  });
+
+  it('registers and updates a public display name without changing the login account', async () => {
+    const registered = await registerUser({
+      username: 'account-001',
+      displayName: '火影同学',
+      password: 'long-password-123'
+    });
+    expect(registered.status).toBe(201);
+    const session = (await registered.json()) as {
+      token: string;
+      user: { username: string; displayName: string };
+    };
+    expect(session.user).toMatchObject({
+      username: 'account-001',
+      displayName: '火影同学'
+    });
+
+    const updated = await app.request(
+      '/api/v1/auth/account',
+      {
+        method: 'PATCH',
+        headers: authHeaders(session.token),
+        body: JSON.stringify({ displayName: '新展示名' })
+      },
+      env
+    );
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({
+      user: { username: 'account-001', displayName: '新展示名' }
+    });
+
+    const login = await loginUser({
+      username: 'account-001',
+      password: 'long-password-123'
+    });
+    expect(login.status).toBe(200);
+  });
+});

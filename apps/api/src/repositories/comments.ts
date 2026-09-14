@@ -49,7 +49,7 @@ export interface UpdateCommentDecisionInput {
 const COMMENT_COLUMNS =
   'c.id, c.product_id, c.user_id, c.body, c.status, c.reviewed_by, c.reviewed_at, c.rejection_reason, c.visible_until, c.created_at, c.updated_at';
 const COMMENT_AUTHOR_COLUMNS =
-  'u.username AS username, u.permission_role AS permission_role, u.membership_tier AS membership_tier, u.membership_expires_at AS membership_expires_at';
+  'COALESCE(u.display_name, u.username) AS username, u.permission_role AS permission_role, u.membership_tier AS membership_tier, u.membership_expires_at AS membership_expires_at';
 
 export async function productExists(db: D1Database, productId: string): Promise<boolean> {
   const row = await db

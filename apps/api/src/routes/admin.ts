@@ -127,6 +127,7 @@ const RISK_WINDOW_MS = 24 * 60 * 60 * 1000;
 interface AdminUserPayload {
   id: string;
   username: string;
+  displayName: string;
   role: 'user' | 'admin';
   status: 'active' | 'disabled';
   phoneMask: string | null;
@@ -230,6 +231,7 @@ function toAdminUserPayload(
   return {
     id: user.id,
     username: user.username,
+    displayName: user.display_name ?? user.username,
     role: user.role === 'admin' ? 'admin' : 'user',
     status: user.status,
     phoneMask: user.phone_mask,
@@ -251,6 +253,7 @@ function adminUserRowToPayload(
   return {
     id: row.id,
     username: row.username,
+    displayName: row.display_name ?? row.username,
     role: row.role === 'admin' ? 'admin' : 'user',
     status: row.status,
     phoneMask: row.phone_mask,

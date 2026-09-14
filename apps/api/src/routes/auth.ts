@@ -15,6 +15,7 @@ import {
 
 const registerSchema = z.object({
   username: z.string(),
+  displayName: z.string().optional(),
   password: z.string(),
   phone: z.string().optional(),
   email: z.string().optional()
@@ -32,6 +33,7 @@ const recoverSchema = z.object({
 });
 
 const accountPatchSchema = z.object({
+  displayName: z.string().optional(),
   newPassword: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional()

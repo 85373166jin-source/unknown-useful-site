@@ -118,6 +118,12 @@ author-only comment and the SVIP quota both clear on schedule. There is no manua
 cleanup step; if cleanup looks stalled, check the Worker's cron trigger and recent
 invocations in the Cloudflare dashboard.
 
+## 账号与展示用户名
+
+`users.username` 是登录账号，公开页面和评论使用 `users.display_name`。展示用户名长度为
+2–20 个字符且全站唯一，现有用户默认沿用原登录账号。用户可在用户中心单独修改展示用户名，
+修改展示名不会改变登录账号、会话或已有订单。
+
 ## 修改站长和课程凭据
 
 Open `/admin/#/settings` to change any of the following without editing the database:

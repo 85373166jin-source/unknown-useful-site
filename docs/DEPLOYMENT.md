@@ -15,8 +15,9 @@ new frontend is published:
 
 1. Back up the remote database with `npm run export:data`.
 2. Apply the pending remote migrations, including
-   `apps/api/migrations/0004_comments.sql` (comments) and
-   `apps/api/migrations/0005_free_product.sql` (the `free` product).
+   `apps/api/migrations/0004_comments.sql` (comments),
+   `apps/api/migrations/0005_free_product.sql` (the `free` product), and
+   `apps/api/migrations/0006_display_name.sql` (public display names).
 3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
 4. Only then push the Pages build. Publishing Pages before the matching Worker
    makes the new comment UI call endpoints that do not exist yet.
@@ -134,8 +135,9 @@ The comments phase adds two more migrations. Apply
 `apps/api/migrations/0004_comments.sql`, which creates the `comments` table plus
 its product/status/created and `author_only` visibility indexes, and
 `apps/api/migrations/0005_free_product.sql`, which inserts a legacy DB-only `free` placeholder
-that no longer has a user-facing comment surface. Apply both before deploying the Worker
-that serves the comment endpoints.
+that no longer has a user-facing comment surface. Apply them before deploying the Worker that
+serves the comment endpoints. `0006_display_name.sql` also adds the unique public
+display-name column, so apply it before deploying this frontend and Worker.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,

@@ -52,6 +52,7 @@ export function AuthPage({ mode }: AuthPageProps) {
   const location = useLocation();
 
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -77,6 +78,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       if (mode === 'register') {
         await register({
           username,
+          displayName,
           password,
           phone: phone || undefined,
           email: email || undefined
@@ -145,7 +147,7 @@ export function AuthPage({ mode }: AuthPageProps) {
 
         <form className="form" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="auth-username">用户名</label>
+            <label htmlFor="auth-username">账号</label>
             <input
               id="auth-username"
               name="username"
@@ -155,6 +157,19 @@ export function AuthPage({ mode }: AuthPageProps) {
               required
             />
           </div>
+
+          {mode === 'register' && (
+            <div className="field">
+              <label htmlFor="auth-display-name">展示用户名</label>
+              <input
+                id="auth-display-name"
+                name="displayName"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                required
+              />
+            </div>
+          )}
 
           {mode !== 'recover' && (
             <div className="field">

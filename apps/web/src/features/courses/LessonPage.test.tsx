@@ -12,6 +12,7 @@ const PENDING_QUEUE_KEY = 'unknown-useful-site.progress-queue';
 const TEST_USER_1: AuthUser = {
   id: 'user-1',
   username: 'alice',
+  displayName: 'alice',
   role: 'user',
   permissionRole: 'user',
   membershipTier: 'normal',
@@ -25,6 +26,7 @@ const TEST_USER_1: AuthUser = {
 const TEST_USER_2: AuthUser = {
   id: 'user-2',
   username: 'bob',
+  displayName: 'bob',
   role: 'user',
   permissionRole: 'user',
   membershipTier: 'normal',

@@ -8,6 +8,7 @@ function adminUser(permissionRole: AuthUser['permissionRole']): AuthUser {
   return {
     id: `${permissionRole}-1`,
     username: permissionRole,
+    displayName: permissionRole,
     role: 'admin',
     permissionRole,
     membershipTier: 'normal',
