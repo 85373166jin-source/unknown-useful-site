@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CATALOG, type MembershipTier, type PermissionRole, type ProductId } from '@site/contracts';
+import {
+  CATALOG,
+  centsToYuanString,
+  type MembershipTier,
+  type PermissionRole,
+  type ProductId
+} from '@site/contracts';
 import { ApiError, apiFetch, apiUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { SubsitePanel } from './SubsitePanel';
@@ -19,6 +25,12 @@ const MEMBERSHIP_TIER_LABELS: Record<MembershipTier, string> = {
   normal: '普通会员',
   vip: 'VIP',
   svip: 'SVIP'
+};
+
+const MEMBERSHIP_DISCOUNTS: Record<MembershipTier, string> = {
+  normal: '原价',
+  vip: '全场商品 8 折',
+  svip: '全场商品 5 折'
 };
 
 interface PaymentOrder {
@@ -63,7 +75,9 @@ const PRODUCT_NAMES: Partial<Record<ProductId, string>> = {
 };
 
 function productName(productId: ProductId): string {
-  if (productId in CATALOG.products) return CATALOG.products[productId as keyof typeof CATALOG.products].title;
+  if (productId in CATALOG.products) {
+    return CATALOG.products[productId as keyof typeof CATALOG.products].title;
+  }
   return PRODUCT_NAMES[productId] ?? productId;
 }
 
@@ -73,9 +87,10 @@ export function AccountPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [contactKind, setContactKind] = useState<'phone' | 'email' | null>(null);
+  const [contactValue, setContactValue] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,8 +99,10 @@ export function AccountPage() {
   const [contributions, setContributions] = useState<ContributionItem[]>([]);
   const [hasSubsite, setHasSubsite] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [walletAvailableCents, setWalletAvailableCents] = useState(0);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [showPositions, setShowPositions] = useState(false);
+  const [showDisplayNameEditor, setShowDisplayNameEditor] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -95,9 +112,10 @@ export function AccountPage() {
       apiFetch<{ orders: PaymentOrder[] }>('/orders/mine'),
       apiFetch<{ contributions: ContributionItem[] }>('/contributions/mine'),
       apiFetch<{ subsite: SubsiteState | null }>('/subsites/me'),
-      apiFetch<{ notifications: NotificationItem[] }>('/wallet/notifications')
+      apiFetch<{ notifications: NotificationItem[] }>('/wallet/notifications'),
+      apiFetch<{ summary: { availableCents: number } }>('/wallet')
     ])
-      .then(([entitlements, orders, submitted, subsitePayload, notificationPayload]) => {
+      .then(([entitlements, orders, submitted, subsitePayload, notificationPayload, walletPayload]) => {
         if (cancelled) return;
         setPaidProductIds(entitlements.unlocked ?? []);
         setPaymentOrders(orders.orders ?? []);
@@ -106,6 +124,7 @@ export function AccountPage() {
         setUnreadNotifications(
           (notificationPayload.notifications ?? []).filter((item) => item.read_at === null).length
         );
+        setWalletAvailableCents(walletPayload.summary?.availableCents ?? 0);
       })
       .catch(() => {
         // Keep the account page usable when optional history fails to load.
@@ -115,9 +134,7 @@ export function AccountPage() {
     };
   }, [user]);
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const permissionRole: PermissionRole =
     user.permissionRole ?? (user.role === 'admin' ? 'owner' : 'user');
@@ -129,14 +146,21 @@ export function AccountPage() {
       : formatCreatedAt(user.membershipExpiresAt);
   const pendingOrders = paymentOrders.filter((order) => order.status === 'pending');
   const pendingContributions = contributions.filter((item) => item.status === 'pending');
-  async function handleDisplayNameUpdate(event: FormEvent<HTMLFormElement>) {
+
+  function openContactEditor(kind: 'phone' | 'email'): void {
+    setContactKind(kind);
+    setContactValue('');
+    setError(null);
+  }
+
+  async function handleDisplayNameUpdate(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setNotice(null);
     setError(null);
     setBusy(true);
     try {
       await updateAccount({ displayName });
-      setDisplayName('');
+      setShowDisplayNameEditor(false);
       setNotice('展示用户名已更新');
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
@@ -145,13 +169,13 @@ export function AccountPage() {
     }
   }
 
-  async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
+  async function handlePasswordChange(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setNotice(null);
     setError(null);
     setBusy(true);
     try {
-      await updateAccount({ newPassword });
+      await updateAccount({ currentPassword, newPassword });
       clearSession();
       navigate('/login', {
         replace: true,
@@ -163,15 +187,19 @@ export function AccountPage() {
     }
   }
 
-  async function handlePhoneUpdate(event: FormEvent<HTMLFormElement>) {
+  async function handleContactUpdate(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (!contactKind) return;
     setNotice(null);
     setError(null);
     setBusy(true);
     try {
-      await updateAccount({ phone });
-      setPhone('');
-      setNotice('手机号已更新');
+      await updateAccount(
+        contactKind === 'phone' ? { phone: contactValue } : { email: contactValue }
+      );
+      setContactKind(null);
+      setContactValue('');
+      setNotice(contactKind === 'phone' ? '手机号已更新' : '邮箱已更新');
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
     } finally {
@@ -179,28 +207,28 @@ export function AccountPage() {
     }
   }
 
-  async function handleEmailUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleContactUnbind(): Promise<void> {
+    if (!contactKind) return;
     setNotice(null);
     setError(null);
     setBusy(true);
     try {
-      await updateAccount({ email });
-      setEmail('');
-      setNotice('邮箱已更新');
+      await updateAccount(contactKind === 'phone' ? { phone: '' } : { email: '' });
+      setContactKind(null);
+      setNotice(contactKind === 'phone' ? '手机号已解绑' : '邮箱已解绑');
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
+      setError(caught instanceof ApiError ? caught.message : '解绑失败');
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleLogout() {
+  async function handleLogout(): Promise<void> {
     await logout();
     navigate('/login', { replace: true });
   }
 
-  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+  async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -232,28 +260,21 @@ export function AccountPage() {
   return (
     <section className="account-page">
       <div className="account-page__header">
-        <div className="account-page__title-actions">
-          <h1>用户中心</h1>
-          <Link className="account-notification-button" to="/notifications" aria-label="查看通知">
+        <h1>用户中心</h1>
+        <div className="account-page__actions">
+          <Link className="button button--primary" to="/contribute">合作投稿</Link>
+          <Link className="button button--primary account-notification-button" to="/notifications" aria-label="查看通知">
             通知
             {unreadNotifications > 0 ? <span className="account-notification-button__badge">{unreadNotifications}</span> : null}
           </Link>
+          <button type="button" className="button" onClick={() => void handleLogout()}>
+            退出登录
+          </button>
         </div>
-        <button type="button" className="button" onClick={() => void handleLogout()}>
-          退出登录
-        </button>
       </div>
 
-      {notice && (
-        <div className="alert alert--success" role="status">
-          {notice}
-        </div>
-      )}
-      {error && (
-        <div className="alert alert--error" role="alert">
-          {error}
-        </div>
-      )}
+      {notice ? <div className="alert alert--success" role="status">{notice}</div> : null}
+      {error && !contactKind && !showDisplayNameEditor ? <div className="alert alert--error" role="alert">{error}</div> : null}
 
       <div className="card">
         <h2>账号资料</h2>
@@ -263,12 +284,7 @@ export function AccountPage() {
           ) : (
             <span aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
           )}
-          <button
-            type="button"
-            className="button"
-            disabled={avatarBusy}
-            onClick={() => avatarInputRef.current?.click()}
-          >
+          <button type="button" className="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
             {avatarBusy ? '上传中…' : '更换头像'}
           </button>
           <input
@@ -279,14 +295,27 @@ export function AccountPage() {
             onChange={(event) => void handleAvatarChange(event)}
           />
         </div>
-        <dl className="account-facts">
+
+        <dl className="account-facts account-facts--wide">
           <div>
             <dt>账号</dt>
             <dd>{user.username}</dd>
           </div>
           <div>
             <dt>展示用户名</dt>
-            <dd>{user.displayName}</dd>
+            <dd>
+              <span>{user.displayName}</span>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setDisplayName(user.displayName);
+                  setShowDisplayNameEditor(true);
+                }}
+              >
+                点击修改
+              </button>
+            </dd>
           </div>
           <div>
             <dt>注册时间</dt>
@@ -294,51 +323,58 @@ export function AccountPage() {
           </div>
           <div>
             <dt>手机号</dt>
-            <dd>{user.phoneMask ?? '未绑定'}</dd>
+            <dd>
+              <button type="button" className="account-fact-link" onClick={() => openContactEditor('phone')}>
+                {user.phoneMask ?? '点击绑定'}
+              </button>
+            </dd>
           </div>
           <div>
             <dt>邮箱</dt>
-            <dd>{user.emailMask ?? '未绑定'}</dd>
+            <dd>
+              <button type="button" className="account-fact-link" onClick={() => openContactEditor('email')}>
+                {user.emailMask ?? '点击绑定'}
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>身份角色</dt>
+            <dd>
+              <span>{PERMISSION_ROLE_LABELS[permissionRole]}</span>
+              <button type="button" className="link-button" onClick={() => setShowPositions(true)}>
+                点击查看所有职位
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>我的余额</dt>
+            <dd>
+              <Link className="account-fact-link" to="/wallet">
+                {centsToYuanString(walletAvailableCents)} 元
+              </Link>
+            </dd>
           </div>
         </dl>
       </div>
 
-      <div className="account-identity-grid">
-        <section className="card account-identity-block">
-          <h2>身份角色</h2>
-          <p className="account-identity-block__value">{PERMISSION_ROLE_LABELS[permissionRole]}</p>
-          <button type="button" className="link-button" onClick={() => setShowPositions(true)}>
-            点击查看所有职位
-          </button>
-        </section>
-
-        <section className="card account-identity-block">
+      <section className="card account-membership-summary">
+        <div>
           <h2>会员等级</h2>
-          <p className="account-identity-block__value">{MEMBERSHIP_TIER_LABELS[membershipTier]}</p>
+          <p className="account-membership-summary__tier">{MEMBERSHIP_TIER_LABELS[membershipTier]}</p>
+          <p>{MEMBERSHIP_DISCOUNTS[membershipTier]}</p>
           {membershipTier === 'normal' ? (
-            <>
-              <p className="account-identity-block__detail">尚未开通会员</p>
-              <p className="account-identity-block__advice">开通后可享受全场商品折扣</p>
-              <Link to="/membership">开通会员</Link>
-            </>
+            <p>开通后可享受全场商品折扣。</p>
           ) : (
-            <>
-              <p className="account-identity-block__detail">
-                会员剩余 {membershipRemainingDays} 天
-              </p>
-              {membershipExpiresAt ? <p>到期时间：{membershipExpiresAt}</p> : null}
-              {membershipRemainingDays <= 7 ? (
-                <p className="account-renewal-reminder">会员即将到期，建议及时续费</p>
-              ) : (
-                <p className="account-identity-block__advice">到期前可前往会员中心续费</p>
-              )}
-              <Link to="/membership">前往会员中心</Link>
-            </>
+            <p>会员剩余 {membershipRemainingDays} 天{membershipExpiresAt ? `，到期时间 ${membershipExpiresAt}` : ''}</p>
           )}
-        </section>
-        <section className="card account-identity-block"><h2>我的余额</h2><p>查看分站收益、投稿收益和提现记录。</p><Link className="button" to="/wallet">进入我的余额</Link></section>
-        <section className="card account-identity-block"><h2>合作投稿</h2><p>自由选择分成收益；图片或视频通过后解锁 ZIP 投稿。</p><Link className="button" to="/contribute">进入合作投稿</Link></section>
-      </div>
+          {membershipRemainingDays > 0 && membershipRemainingDays <= 7 ? (
+            <p className="account-renewal-reminder">会员即将到期，建议及时续费</p>
+          ) : null}
+        </div>
+        <Link className="button button--primary" to="/membership">
+          {membershipTier === 'normal' ? '开通会员' : '续费或升级'}
+        </Link>
+      </section>
 
       <SubsitePanel />
 
@@ -353,28 +389,20 @@ export function AccountPage() {
       ) : null}
 
       <div className="card">
-        <h2>展示用户名</h2>
-        <form className="form" onSubmit={handleDisplayNameUpdate}>
+        <h2>修改密码</h2>
+        <form className="form" onSubmit={handlePasswordChange}>
           <div className="field">
-            <label htmlFor="account-display-name">新展示用户名</label>
+            <label htmlFor="account-current-password">原密码</label>
             <input
-              id="account-display-name"
-              name="displayName"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={user.displayName}
+              id="account-current-password"
+              name="currentPassword"
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              autoComplete="current-password"
               required
             />
           </div>
-          <button type="submit" className="button" disabled={busy}>
-            保存展示用户名
-          </button>
-        </form>
-      </div>
-
-      <div className="card">
-        <h2>修改密码</h2>
-        <form className="form" onSubmit={handlePasswordChange}>
           <div className="field">
             <label htmlFor="account-new-password">新密码</label>
             <input
@@ -389,43 +417,6 @@ export function AccountPage() {
           </div>
           <button type="submit" className="button button--primary" disabled={busy}>
             修改密码
-          </button>
-        </form>
-      </div>
-
-      <div className="card">
-        <h2>更新联系方式</h2>
-        <form className="form" onSubmit={handlePhoneUpdate}>
-          <div className="field">
-            <label htmlFor="account-phone">手机号</label>
-            <input
-              id="account-phone"
-              name="phone"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              autoComplete="tel"
-              placeholder="留空并保存可解绑手机号"
-            />
-          </div>
-          <button type="submit" className="button" disabled={busy}>
-            保存手机号
-          </button>
-        </form>
-        <form className="form" onSubmit={handleEmailUpdate}>
-          <div className="field">
-            <label htmlFor="account-email">邮箱</label>
-            <input
-              id="account-email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
-              placeholder="留空并保存可解绑邮箱"
-            />
-          </div>
-          <button type="submit" className="button" disabled={busy}>
-            保存邮箱
           </button>
         </form>
       </div>
@@ -446,38 +437,40 @@ export function AccountPage() {
         )}
       </div>
 
-      {(hasSubsite || contributions.length > 0) ? <div className="card">
-        <h2>待审核项目</h2>
-        {pendingOrders.length === 0 && pendingContributions.length === 0 ? (
-          <p className="empty-state">暂无待审核项目</p>
-        ) : (
-          <>
-            <p>合计 {pendingOrders.length + pendingContributions.length} 项待审核</p>
-            <h3>付款申请（{pendingOrders.length}）</h3>
-            {pendingOrders.length === 0 ? <p className="empty-state">暂无付款申请</p> : (
-              <ul className="comments__list">
-                {pendingOrders.map((order) => (
-                  <li className="comment-item" key={order.orderNo}>
-                    <strong>{productName(order.productId)}</strong>
-                    <p>订单号：{order.orderNo} · 待审核</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <h3>合作投稿（{pendingContributions.length}）</h3>
-            {pendingContributions.length === 0 ? <p className="empty-state">暂无合作投稿</p> : (
-              <ul className="comments__list">
-                {pendingContributions.map((item) => (
-                  <li className="comment-item" key={item.id}>
-                    <strong>{item.title}</strong>
-                    <p>{item.kind.toUpperCase()} · 待审核</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div> : null}
+      {hasSubsite || contributions.length > 0 ? (
+        <div className="card">
+          <h2>待审核项目</h2>
+          {pendingOrders.length === 0 && pendingContributions.length === 0 ? (
+            <p className="empty-state">暂无待审核项目</p>
+          ) : (
+            <>
+              <p>合计 {pendingOrders.length + pendingContributions.length} 项待审核</p>
+              <h3>付款申请（{pendingOrders.length}）</h3>
+              {pendingOrders.length === 0 ? <p className="empty-state">暂无付款申请</p> : (
+                <ul className="comments__list">
+                  {pendingOrders.map((order) => (
+                    <li className="comment-item" key={order.orderNo}>
+                      <strong>{productName(order.productId)}</strong>
+                      <p>订单号：{order.orderNo} · 待审核</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <h3>合作投稿（{pendingContributions.length}）</h3>
+              {pendingContributions.length === 0 ? <p className="empty-state">暂无合作投稿</p> : (
+                <ul className="comments__list">
+                  {pendingContributions.map((item) => (
+                    <li className="comment-item" key={item.id}>
+                      <strong>{item.title}</strong>
+                      <p>{item.kind.toUpperCase()} · 待审核</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
 
       {showPositions ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setShowPositions(false)}>
@@ -500,6 +493,76 @@ export function AccountPage() {
                 </li>
               ))}
             </ul>
+          </section>
+        </div>
+      ) : null}
+
+      {showDisplayNameEditor ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShowDisplayNameEditor(false)}>
+          <section
+            className="card modal-card modal-card--small"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="display-name-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-card__header">
+              <h2 id="display-name-title">修改展示用户名</h2>
+              <button type="button" className="button" onClick={() => setShowDisplayNameEditor(false)}>关闭</button>
+            </div>
+            {error ? <div className="alert alert--error" role="alert">{error}</div> : null}
+            <form className="form" onSubmit={handleDisplayNameUpdate}>
+              <div className="field">
+                <label htmlFor="account-display-name">新展示用户名</label>
+                <input
+                  id="account-display-name"
+                  name="displayName"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="button button--primary" disabled={busy}>保存展示用户名</button>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {contactKind ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setContactKind(null)}>
+          <section
+            className="card modal-card modal-card--small"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-card__header">
+              <h2 id="contact-title">{contactKind === 'phone' ? '绑定手机号' : '绑定邮箱'}</h2>
+              <button type="button" className="button" onClick={() => setContactKind(null)}>关闭</button>
+            </div>
+            {error ? <div className="alert alert--error" role="alert">{error}</div> : null}
+            <form className="form" onSubmit={handleContactUpdate}>
+              <div className="field">
+                <label htmlFor="account-contact-value">{contactKind === 'phone' ? '手机号' : '邮箱'}</label>
+                <input
+                  id="account-contact-value"
+                  type={contactKind === 'email' ? 'email' : 'tel'}
+                  value={contactValue}
+                  onChange={(event) => setContactValue(event.target.value)}
+                  autoComplete={contactKind === 'phone' ? 'tel' : 'email'}
+                  required
+                />
+              </div>
+              <div className="account-modal-actions">
+                {(contactKind === 'phone' ? user.phoneMask : user.emailMask) ? (
+                  <button type="button" className="button" disabled={busy} onClick={() => void handleContactUnbind()}>
+                    解绑
+                  </button>
+                ) : null}
+                <button type="submit" className="button button--primary" disabled={busy}>保存</button>
+              </div>
+            </form>
           </section>
         </div>
       ) : null}

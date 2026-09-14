@@ -100,6 +100,7 @@ export interface RecoverInput {
 
 export interface AccountPatchInput {
   displayName?: string | undefined;
+  currentPassword?: string | undefined;
   newPassword?: string | undefined;
   phone?: string | undefined;
   email?: string | undefined;
@@ -558,6 +559,13 @@ export async function updateAccount(
 
   if (input.newPassword !== undefined) {
     assertValidPassword(input.newPassword);
+    if (!input.currentPassword) {
+      throw new ApiError('current_password_required', '请输入原密码', 400);
+    }
+    const currentPasswordMatches = await verifyPassword(input.currentPassword, user.password_hash);
+    if (!currentPasswordMatches) {
+      throw new ApiError('invalid_current_password', '原密码错误', 400);
+    }
   }
 
   const before = {

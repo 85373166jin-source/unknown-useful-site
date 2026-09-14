@@ -56,6 +56,7 @@ export interface RecoverInput {
 
 export interface AccountPatchInput {
   displayName?: string | undefined;
+  currentPassword?: string | undefined;
   newPassword?: string | undefined;
   phone?: string | undefined;
   email?: string | undefined;

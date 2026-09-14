@@ -308,6 +308,7 @@
 }
 
 .account-page__title-actions,
+.account-page__actions,
 .account-avatar,
 .account-subsites__header,
 .notification-list-card__toolbar,
@@ -322,15 +323,16 @@
   flex-wrap: wrap;
 }
 
+.account-page__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .account-notification-button {
   position: relative;
-  border: 1px solid var(--brand-blue);
-  border-radius: 999px;
-  padding: 6px 14px;
-  color: var(--brand-blue);
-  font-weight: 700;
-  text-decoration: none;
-  background: rgba(47, 111, 237, 0.06);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .account-notification-button__badge {
@@ -349,6 +351,34 @@
 
 .account-avatar {
   margin-bottom: var(--space-4);
+}
+
+.account-facts--wide {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.account-facts--wide dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.account-fact-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand-blue);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.account-fact-link:hover,
+.link-button:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
 }
 
 .account-avatar img,
@@ -430,6 +460,20 @@
   color: var(--brand-blue);
 }
 
+.account-membership-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  background: linear-gradient(135deg, rgba(47, 111, 237, 0.08), rgba(124, 58, 237, 0.08));
+}
+
+.account-membership-summary__tier {
+  color: var(--brand-purple);
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
 .notification-categories {
   display: flex;
   flex-wrap: wrap;
@@ -485,6 +529,16 @@
   overflow: auto;
 }
 
+.modal-card--small {
+  width: min(460px, 100%);
+}
+
+.account-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 .modal-card__header {
   justify-content: space-between;
   margin-bottom: var(--space-3);
@@ -509,9 +563,18 @@
 
 @media (max-width: 760px) {
   .account-page__header,
-  .account-subsites__header {
+  .account-subsites__header,
+  .account-membership-summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .account-page__actions {
+    justify-content: flex-start;
+  }
+
+  .account-facts--wide {
+    grid-template-columns: 1fr;
   }
 
   .membership-products {

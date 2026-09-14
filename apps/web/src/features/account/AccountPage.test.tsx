@@ -55,13 +55,16 @@ describe('AccountPage', () => {
     expect(screen.getAllByText('展示用户名').length).toBeGreaterThan(0);
     expect(screen.getByText('已付费项目')).toBeInTheDocument();
     expect(screen.queryByText('待审核项目')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '展示用户名' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '更新联系方式' })).not.toBeInTheDocument();
     expect(screen.getByText('身份角色')).toBeInTheDocument();
     expect(screen.getByText('用户')).toBeInTheDocument();
     expect(screen.getByText('会员等级')).toBeInTheDocument();
     expect(screen.getByText('加入分站')).toBeInTheDocument();
-    expect(screen.getByText('会员剩余 23 天')).toBeInTheDocument();
+    expect(screen.getByText(/会员剩余 23 天/)).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
     expect(screen.getByText(/未加入/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '合作投稿' })).toHaveAttribute('href', '/contribute');
     expect(screen.getByRole('link', { name: '查看通知' })).toHaveAttribute('href', '/notifications');
     expect(screen.getByText('免费分站')).toBeInTheDocument();
     expect(screen.getByText('基础分站')).toBeInTheDocument();
@@ -75,6 +78,14 @@ describe('AccountPage', () => {
     expect(screen.getByRole('dialog', { name: '所有职位' })).toBeInTheDocument();
     expect(screen.getByText('合作管理员')).toBeInTheDocument();
     expect(screen.getByText('站长')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '点击修改' }));
+    expect(screen.getByRole('dialog', { name: '修改展示用户名' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: '点击绑定' })[0]!);
+    expect(screen.getByRole('dialog', { name: '绑定手机号' })).toBeInTheDocument();
   });
 
   it('clears the revoked session and shows a notice after password change', async () => {
@@ -90,6 +101,9 @@ describe('AccountPage', () => {
       </TestProviders>
     );
 
+    fireEvent.change(screen.getByLabelText('原密码'), {
+      target: { value: 'old-password-123' }
+    });
     fireEvent.change(screen.getByLabelText('新密码'), {
       target: { value: 'new-password-123' }
     });

@@ -335,7 +335,12 @@ describe('authentication API', () => {
       {
         method: 'PATCH',
         headers: { ...authHeaders(first.token), ...JSON_HEADERS },
-        body: JSON.stringify({ newPassword: 'new-password-456', phone: '13900000000', email: 'alice@example.com' })
+        body: JSON.stringify({
+          currentPassword: 'old-password-123',
+          newPassword: 'new-password-456',
+          phone: '13900000000',
+          email: 'alice@example.com'
+        })
       },
       env
     );
@@ -354,6 +359,39 @@ describe('authentication API', () => {
 
     const login = await loginUser({ username: 'alice', password: 'new-password-456' });
     expect(login.status).toBe(200);
+  });
+
+  it('requires the current password before changing the password', async () => {
+    const register = await registerUser({ username: 'alice', password: 'old-password-123' });
+    const session = (await register.json()) as { token: string };
+
+    await expectError(
+      await app.request(
+        '/api/v1/auth/account',
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(session.token), ...JSON_HEADERS },
+          body: JSON.stringify({ newPassword: 'new-password-456' })
+        },
+        env
+      ),
+      400,
+      'current_password_required'
+    );
+
+    await expectError(
+      await app.request(
+        '/api/v1/auth/account',
+        {
+          method: 'PATCH',
+          headers: { ...authHeaders(session.token), ...JSON_HEADERS },
+          body: JSON.stringify({ currentPassword: 'wrong-password', newPassword: 'new-password-456' })
+        },
+        env
+      ),
+      400,
+      'invalid_current_password'
+    );
   });
 
   it('rejects an invalid email through the account patch endpoint', async () => {
