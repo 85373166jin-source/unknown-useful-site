@@ -73,10 +73,10 @@ a 2900-cent course is `23.20` yuan for VIP and `14.50` yuan for SVIP.
 ## Comment moderation
 
 Product comments are plain text (1 to 1000 characters) bound to a `product_id`,
-and appear on the course pages (`super`, `anbu`, `bundle`), the membership page
-(`vip_monthly`, `svip_monthly`), and the homepage free-resource area (`free`).
-The comment table comes from `apps/api/migrations/0004_comments.sql`; the `free`
-product it can host comments for comes from
+They appear only on the course pages (`super`, `anbu`, `bundle`)
+and on future course/digital products. Membership purchases and the free-resource area do not show comments.
+The comment table comes from `apps/api/migrations/0004_comments.sql`; the legacy `free`
+placeholder comes from
 `apps/api/migrations/0005_free_product.sql`.
 
 1. Open `/admin/#/comments` (visible to the owner and to comment moderators).

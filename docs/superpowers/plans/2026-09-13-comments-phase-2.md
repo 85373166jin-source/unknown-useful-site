@@ -1,11 +1,11 @@
 # 评论系统第二阶段实施计划
 
-**目标：** 所有数据库中的产品都支持纯文本评论；普通用户和 VIP 评论需审核，SVIP 评论免审核；SVIP 10 分钟内前 3 条公开，后续评论仅作者可见 1 小时后永久删除；站长和评论管理员可审核、删除评论。
+**目标：** 课程和未来数字产品支持各自独立的纯文本评论；普通用户和 VIP 评论需审核，SVIP 评论免审核；SVIP 10 分钟内前 3 条公开，后续评论仅作者可见 1 小时后永久删除；站长和评论管理员可审核、删除评论。
 
 ## 全局规则
 
 - 评论绑定 `product_id`，产品不存在时拒绝。
-- 评论面向数据库中的每一个产品，包括 `presale` / `coming_soon` 这类占位产品：用户明确要求每个免费与付费条目都可评论，因此评论入口不按产品 `status` 或是否可购买来过滤（“产品不存在才拒绝”优先于任何“仅 active 产品可评论”的表述）。
+- 评论只面向 `course` / `digital` 类型的独立产品，包括预售或待上线课程；会员产品、免费资源专区和人工服务不展示评论。
 - 第一版只支持纯文本，长度 1 到 1000 字。
 - `comments.status` 只能是 `pending`、`public`、`rejected`、`author_only`。
 - 普通/VIP 创建为 `pending`，作者可见“审核中”，审核通过后公开。
@@ -62,7 +62,7 @@ CREATE INDEX idx_comments_visible_until ON comments(visible_until) WHERE status 
 - 发布成功后：pending 显示“审核中”；SVIP public 显示“发布成功”；author_only 只在作者侧显示为正常评论，不显示特殊标签。
 - 评论项显示用户名、当前有效 VIP/SVIP 标识、剩余天数、合作管理员标识和时间。
 - 课程页为 `super`、`anbu`、`bundle` 提供评论区。
-- 会员页为 `vip_monthly`、`svip_monthly` 提供评论区。
+
 - `AdminComments` 支持按 pending/public/author_only 筛选，审核通过、拒绝、删除。
 - 评论管理导航仅对 owner 和 admin 显示；其他站长专属导航仍仅 owner 可见。
 

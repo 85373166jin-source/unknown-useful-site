@@ -52,7 +52,10 @@ const COMMENT_AUTHOR_COLUMNS =
   'u.username AS username, u.permission_role AS permission_role, u.membership_tier AS membership_tier, u.membership_expires_at AS membership_expires_at';
 
 export async function productExists(db: D1Database, productId: string): Promise<boolean> {
-  const row = await db.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first<{ id: string }>();
+  const row = await db
+    .prepare("SELECT id FROM products WHERE id = ? AND product_type IN ('course', 'digital')")
+    .bind(productId)
+    .first<{ id: string }>();
   return row !== null;
 }
 

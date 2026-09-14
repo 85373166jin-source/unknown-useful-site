@@ -133,8 +133,8 @@ membership seed step after the first Worker deployment.
 The comments phase adds two more migrations. Apply
 `apps/api/migrations/0004_comments.sql`, which creates the `comments` table plus
 its product/status/created and `author_only` visibility indexes, and
-`apps/api/migrations/0005_free_product.sql`, which inserts the `free` product that
-backs the homepage free-resource comments. Apply both before deploying the Worker
+`apps/api/migrations/0005_free_product.sql`, which inserts a legacy DB-only `free` placeholder
+that no longer has a user-facing comment surface. Apply both before deploying the Worker
 that serves the comment endpoints.
 
 ### Seeding

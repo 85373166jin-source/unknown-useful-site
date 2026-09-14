@@ -1,33 +1,7 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import app from '../src/index';
 import { seedCatalogAndAdmin } from '../src/db/seed';
 import { resetTestDatabase, TABLES_TO_CLEAR } from './helpers/test-db';
-
-const JSON_HEADERS = { 'content-type': 'application/json' };
-
-function authHeaders(token: string): Record<string, string> {
-  return { authorization: `Bearer ${token}` };
-}
-
-function jsonAuthHeaders(token: string): Record<string, string> {
-  return { ...authHeaders(token), ...JSON_HEADERS };
-}
-
-async function registerUser(username: string): Promise<{ token: string }> {
-  const response = await app.request(
-    '/api/v1/auth/register',
-    {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ username, password: 'long-password-123' })
-    },
-    env
-  );
-  expect(response.status).toBe(201);
-  const body = await response.json<{ token: string }>();
-  return { token: body.token };
-}
 
 async function freeProductRow(): Promise<{
   id: string;
@@ -99,55 +73,5 @@ describe('free resource product seed', () => {
 
   it('seeds the free product as a zero-price other product', async () => {
     expect(await freeProductRow()).toEqual(EXPECTED_FREE_PRODUCT);
-  });
-
-  it('serves and stores comments for the free product without touching payments', async () => {
-    const guest = await app.request('/api/v1/products/free/comments', {}, env);
-    expect(guest.status).toBe(200);
-    await expect(guest.json()).resolves.toEqual({
-      comments: [],
-      canComment: false,
-      currentStatus: 'guest'
-    });
-
-    const { token } = await registerUser('free-commenter');
-    const created = await app.request(
-      '/api/v1/products/free/comments',
-      {
-        method: 'POST',
-        headers: jsonAuthHeaders(token),
-        body: JSON.stringify({ body: '免费资源评论' })
-      },
-      env
-    );
-    expect(created.status).toBe(201);
-    const createdBody = await created.json<{ productId: string; status: string; body: string }>();
-    expect(createdBody.productId).toBe('free');
-    expect(createdBody.status).toBe('pending');
-    expect(createdBody.body).toBe('免费资源评论');
-
-    const authorView = await app.request(
-      '/api/v1/products/free/comments',
-      { headers: authHeaders(token) },
-      env
-    );
-    expect(authorView.status).toBe(200);
-    const authorBody = await authorView.json<{
-      comments: Array<{ body: string }>;
-      canComment: boolean;
-    }>();
-    expect(authorBody.canComment).toBe(true);
-    expect(authorBody.comments.map((comment) => comment.body)).toContain('免费资源评论');
-
-    // The free product stays outside the payment flow and cannot be quoted.
-    const quote = await app.request(
-      '/api/v1/orders/quote?productId=free',
-      { headers: authHeaders(token) },
-      env
-    );
-    expect(quote.status).toBe(400);
-    await expect(quote.json()).resolves.toMatchObject({
-      error: { code: 'invalid_product' }
-    });
   });
 });

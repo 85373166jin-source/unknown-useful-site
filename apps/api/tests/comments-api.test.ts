@@ -49,7 +49,7 @@ async function expectError(response: Response, status: number, code: string): Pr
   expect(body.error.code).toBe(code);
 }
 
-async function seedProduct(productId = 'super'): Promise<void> {
+async function seedProduct(productId = 'super', productType = 'course'): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO products
@@ -359,6 +359,25 @@ describe('comments API', () => {
       'SELECT count FROM rate_limits WHERE rate_key = ?'
     ).bind(`comment:svip:${alice.userId}`).first<{ count: number }>();
     expect(quota?.count).toBe(4);
+  });
+
+  it('rejects comments on membership products and the legacy free resource product', async () => {
+    const alice = await registerUser('alice');
+    await seedProduct('vip_monthly', 'membership');
+    await seedProduct('free', 'other');
+
+    for (const productId of ['vip_monthly', 'free']) {
+      await expectError(
+        await app.request(`/api/v1/products/${productId}/comments`, {}, env),
+        404,
+        'product_not_found'
+      );
+      await expectError(
+        await postComment(alice.token, 'hidden comment', productId),
+        404,
+        'product_not_found'
+      );
+    }
   });
 
   it('rejects missing products, unauthenticated posts, and invalid comment bodies', async () => {

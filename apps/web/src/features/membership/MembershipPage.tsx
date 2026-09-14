@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiFetch } from '../../lib/api';
-import { ProductComments } from '../comments/ProductComments';
 
 type MembershipTier = 'normal' | 'vip' | 'svip';
 
@@ -122,10 +121,6 @@ export function MembershipPage() {
             </Link>
           )}
         </article>
-      </div>
-      <div className="membership-comments">
-        <ProductComments productId="vip_monthly" title="VIP 会员评论" />
-        <ProductComments productId="svip_monthly" title="SVIP 豪华会员评论" />
       </div>
     </section>
   );

@@ -177,27 +177,3 @@ test('an owner deletes a public comment from the moderation page', async ({ page
   const guest = await listComments(request, null);
   expect(guest.map((comment) => comment.body)).not.toContain(body);
 });
-
-test('free resource comments live on the homepage and are moderated', async ({ page, request }) => {
-  await page.goto('/#/');
-  const guestSection = commentsSection(page, '免费资源专区评论');
-  await expect(guestSection.getByRole('link', { name: '登录后评论' })).toBeVisible();
-
-  const { token } = await registerUser(request, uniqueUsername('e2e-free'));
-  await setSession(page, token);
-  await page.reload();
-
-  const section = commentsSection(page, '免费资源专区评论');
-  const body = `免费资源评论-${Date.now()}`;
-  await section.getByLabel('评论内容').fill(body);
-  await section.getByRole('button', { name: '发表评论' }).click();
-
-  await expect(section.getByRole('status')).toContainText('审核中');
-  const item = section.locator('.comment-item', { hasText: body });
-  await expect(item.locator('.comment-item__status')).toHaveText('审核中');
-
-  const guest = await request.get(`${API_URL}/api/v1/products/free/comments`);
-  expect(guest.status()).toBe(200);
-  const guestBody = (await guest.json()) as { comments: CommentPayload[] };
-  expect(guestBody.comments.map((comment) => comment.body)).not.toContain(body);
-});

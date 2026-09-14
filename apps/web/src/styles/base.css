@@ -251,8 +251,7 @@ button:disabled {
   color: var(--color-text-muted);
 }
 
-.course-comments,
-.membership-comments {
+.course-comments {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -362,8 +361,3 @@ button:disabled {
   color: #a36a00;
   border-color: rgba(233, 168, 0, 0.4);
 }
-
-.home-free-comments {
-  margin-top: var(--space-6);
-}
-

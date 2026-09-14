@@ -1,4 +1,4 @@
--- Add the database-backed free resource product so the homepage free area can host comments.
+-- Add the legacy database-backed free resource product for catalog compatibility.
 -- Idempotent: re-applying refreshes the row instead of duplicating it.
 
 INSERT INTO products
