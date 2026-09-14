@@ -40,7 +40,7 @@ export const CATALOG = {
       productType: 'course',
       status: 'coming_soon',
       categoryId: 'courses',
-      description: '素材到位后配置视频与课程密码'
+      description: '素材到位后配置视频与一次性卡密'
     },
     bundle: {
       id: 'bundle',

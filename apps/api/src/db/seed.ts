@@ -5,11 +5,6 @@ import { PRODUCT_SORT_ORDER } from '../services/catalog';
 type ProductId = keyof typeof CATALOG.products;
 type SeriesId = keyof typeof CATALOG.series;
 
-const SERIES_PASSWORD_BINDING = {
-  super: 'SUPER_COURSE_PASSWORD_HASH',
-  anbu: 'ANBU_COURSE_PASSWORD_HASH'
-} as const satisfies Record<SeriesId, keyof Pick<Env, 'SUPER_COURSE_PASSWORD_HASH' | 'ANBU_COURSE_PASSWORD_HASH'>>;
-
 const membershipProducts = [
   { id: 'vip_monthly', title: 'VIP 会员', priceCents: 990, productType: 'membership' },
   { id: 'svip_monthly', title: 'SVIP 豪华会员', priceCents: 1990, productType: 'membership' }
@@ -67,7 +62,6 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
   const seriesIds = Object.keys(CATALOG.series) as SeriesId[];
   for (const seriesId of seriesIds) {
     const series = CATALOG.series[seriesId];
-    const passwordHash = env[SERIES_PASSWORD_BINDING[seriesId]];
     await env.DB.prepare(
       `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -76,7 +70,7 @@ export async function seedCatalogAndAdmin(env: Env): Promise<void> {
         status = excluded.status,
         updated_at = excluded.updated_at`
     )
-      .bind(series.id, series.title, series.status, passwordHash, now, now)
+      .bind(series.id, series.title, series.status, 'card-key-only', now, now)
       .run();
 
     for (const lesson of series.lessons) {

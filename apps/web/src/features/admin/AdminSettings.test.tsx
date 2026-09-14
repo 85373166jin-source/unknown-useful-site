@@ -21,18 +21,17 @@ describe('AdminSettings', () => {
 
     expect(screen.getByLabelText('新站长用户名')).toBeInTheDocument();
     expect(screen.getByLabelText('新站长密码')).toBeInTheDocument();
-    expect(screen.getByLabelText('新超影课程密码')).toBeInTheDocument();
-    expect(screen.getByLabelText('新暗影课程密码')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/课程密码/)).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('新超影课程密码'), { target: { value: 'super-new-password' } });
+    fireEvent.change(screen.getByLabelText('新站长密码'), { target: { value: 'admin-new-password' } });
     fireEvent.click(screen.getByRole('button', { name: '保存安全设置' }));
 
     await waitFor(() => {
       expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/admin/security', {
         method: 'PATCH',
-        body: { superCoursePassword: 'super-new-password' }
+        body: { newPassword: 'admin-new-password' }
       });
     });
-    expect(await screen.findByRole('status')).toHaveTextContent('课程密码已更新');
+    expect(await screen.findByRole('status')).toHaveTextContent('安全设置已更新');
   });
 });

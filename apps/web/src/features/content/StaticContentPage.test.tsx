@@ -9,9 +9,9 @@ describe('StaticContentPage', () => {
     expect(screen.getByText('用户协议')).toBeInTheDocument();
   });
 
-  it('renders the purchase-help password section', () => {
+  it('renders the purchase-help card-key section', () => {
     render(<StaticContentPage pageKey="purchase-help" />);
 
-    expect(screen.getByText('使用课程密码观看')).toBeInTheDocument();
+    expect(screen.getByText('使用卡密观看')).toBeInTheDocument();
   });
 });

@@ -22,6 +22,14 @@ import { recordAudit } from './audit';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
 import { buildUpsertSubsiteStatement, type SubsiteTier } from './subsites';
 import { priceProductForUser } from './pricing';
+import {
+  buildPendingEarningStatements,
+  buildSettleEarningStatement,
+  buildUpdateOrderReviewStatement,
+  notifyEarningSettlement,
+  notifyPendingEarnings,
+  resolveOrderAttribution
+} from './settlements';
 
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 export const SCREENSHOT_EXTENSIONS: Record<string, string> = {
@@ -42,6 +50,7 @@ export interface CreatePaymentClaimInput {
   paidAt: string;
   contactText: string;
   screenshot: File;
+  promoCode?: string | undefined;
 }
 
 export interface ProductQuote {
@@ -289,8 +298,17 @@ export async function createPaymentClaim(
     metadata: { contentType: input.screenshot.type }
   });
   const now = Date.now();
-  return insertPaymentClaim(env.DB, {
+  const orderId = crypto.randomUUID();
+  const attribution = await resolveOrderAttribution(env, userId, productId, input.promoCode);
+  const earningStatements = buildPendingEarningStatements(env.DB, {
+    orderId,
+    grossAmountCents: actualAmountCents,
+    attribution,
+    now
+  });
+  const created = await insertPaymentClaim(env.DB, {
     id: crypto.randomUUID(),
+    orderId,
     orderNo,
     userId,
     productId,
@@ -301,9 +319,19 @@ export async function createPaymentClaim(
     paidAt,
     contactText,
     screenshotKey,
+    promoCode: attribution.promoCode,
+    referrerUserId: attribution.referrerUserId,
+    contributionId: attribution.contributionId,
+    subsiteShareBps: attribution.subsiteShareBps,
+    contributionShareBps: attribution.contributionShareBps,
+    earningStatements,
     createdAt: now,
     updatedAt: now
   });
+  if (earningStatements.length > 0) {
+    await notifyPendingEarnings(env, orderId, orderNo);
+  }
+  return created;
 }
 
 export async function listMyPaymentClaims(env: Env, userId: string): Promise<PaymentClaimRow[]> {
@@ -374,6 +402,12 @@ async function approvePaymentClaim(
   note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
+  const order = await env.DB.prepare('SELECT id FROM orders WHERE payment_claim_id = ? LIMIT 1')
+    .bind(claim.id)
+    .first<{ id: string }>();
+  if (!order) {
+    throw new Error('Payment order record is missing');
+  }
   const purchasedTier = MEMBERSHIP_PURCHASE_TIERS[claim.product_id as ProductId];
   let membershipBefore: { tier: 'normal' | 'vip' | 'svip'; expiresAt: number | null } | null = null;
   let membershipStatement: ReturnType<typeof buildApplyMembershipPurchaseStatement> | null = null;
@@ -431,9 +465,18 @@ async function approvePaymentClaim(
     expectedStatus: 'pending',
     expectedMembership
   });
+  const orderStatement = buildUpdateOrderReviewStatement(env.DB, {
+    paymentClaimId: claim.id,
+    status: 'approved',
+    amountCents: actualAmountCents,
+    now
+  });
+  const settlementStatement = buildSettleEarningStatement(env.DB, order.id, 'approved', now);
   const statements = [
     ...(membershipStatement ? [membershipStatement] : []),
     ...(subsiteStatement ? [subsiteStatement] : []),
+    orderStatement,
+    settlementStatement,
     reviewStatement
   ];
   const results = await env.DB.batch(statements);
@@ -508,6 +551,7 @@ async function approvePaymentClaim(
     before: beforeAudit,
     after: afterAudit
   });
+  await notifyEarningSettlement(env, order.id, 'approved');
 
   return updated;
 }
@@ -520,6 +564,12 @@ async function rejectPaymentClaim(
   note: string | null
 ): Promise<PaymentClaimRow> {
   const now = Date.now();
+  const order = await env.DB.prepare('SELECT id FROM orders WHERE payment_claim_id = ? LIMIT 1')
+    .bind(claim.id)
+    .first<{ id: string }>();
+  if (!order) {
+    throw new Error('Payment order record is missing');
+  }
   const updated = await updatePaymentClaimReview(env.DB, claim.order_no, {
     status: 'rejected',
     actualAmountYuan: null,
@@ -530,6 +580,15 @@ async function rejectPaymentClaim(
     reviewedAt: now,
     updatedAt: now
   });
+  await env.DB.batch([
+    buildUpdateOrderReviewStatement(env.DB, {
+      paymentClaimId: claim.id,
+      status: 'rejected',
+      amountCents: null,
+      now
+    }),
+    buildSettleEarningStatement(env.DB, order.id, 'rejected', now)
+  ]);
 
   await recordAudit(env, {
     actorUserId: reviewerUserId,
@@ -539,6 +598,7 @@ async function rejectPaymentClaim(
     before: toPaymentClaimAudit(claim),
     after: toPaymentClaimAudit(updated)
   });
+  await notifyEarningSettlement(env, order.id, 'rejected');
 
   return updated;
 }
@@ -568,6 +628,17 @@ async function correctPaymentClaim(
     note,
     updatedAt: now
   });
+  await env.DB.batch([
+    env.DB.prepare('UPDATE orders SET amount_cents = ?, updated_at = ? WHERE payment_claim_id = ?')
+      .bind(amount.actualAmountCents, now, claim.id),
+    env.DB.prepare(
+      `UPDATE earning_entries
+       SET gross_amount_cents = ?,
+           amount_cents = CAST(ROUND(? * share_bps / 10000.0) AS INTEGER),
+           updated_at = ?
+       WHERE order_id = (SELECT id FROM orders WHERE payment_claim_id = ?)`
+    ).bind(amount.actualAmountCents, amount.actualAmountCents, now, claim.id)
+  ]);
 
   await recordAudit(env, {
     actorUserId: reviewerUserId,

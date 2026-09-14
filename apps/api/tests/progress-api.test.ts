@@ -1,7 +1,6 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import app from '../src/index';
-import { hashPassword } from '../src/services/password';
 import { resetTestDatabase } from './helpers/test-db';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -25,18 +24,16 @@ async function registerUser(username: string): Promise<string> {
   return body.token;
 }
 
-async function unlock(token: string, seriesId: string, password: string): Promise<Response> {
-  const response = await app.request(
-    '/api/v1/entitlements/unlock',
-    {
-      method: 'POST',
-      headers: { ...JSON_HEADERS, ...authHeaders(token) },
-      body: JSON.stringify({ seriesId, password })
-    },
-    env
-  );
-  expect(response.status).toBe(200);
-  return response;
+async function grantEntitlement(token: string, productId: string): Promise<void> {
+  const me = await app.request('/api/v1/auth/me', { headers: authHeaders(token) }, env);
+  expect(me.status).toBe(200);
+  const userId = (await me.json<{ user: { id: string } }>()).user.id;
+  await env.DB.prepare(
+    `INSERT INTO entitlements (id, user_id, product_id, status, source, created_at)
+     VALUES (?, ?, ?, 'active', 'admin', ?)`
+  )
+    .bind(crypto.randomUUID(), userId, productId, Date.now())
+    .run();
 }
 
 async function putProgress(
@@ -61,8 +58,6 @@ async function getProgress(token: string, lessonId: string): Promise<Response> {
 
 async function seedCourseCatalog(): Promise<void> {
   const now = Date.now();
-  const superHash = await hashPassword('super-course-password');
-  const anbuHash = await hashPassword('anbu-course-password');
 
   const products = [
     env.DB.prepare(
@@ -82,12 +77,12 @@ async function seedCourseCatalog(): Promise<void> {
   const series = [
     env.DB.prepare(
       `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at)
-       VALUES ('super', '超影课程', 'active', ?, ?, ?)`
-    ).bind(superHash, now, now),
+       VALUES ('super', '超影课程', 'active', 'retired', ?, ?)`
+    ).bind(now, now),
     env.DB.prepare(
       `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at)
-       VALUES ('anbu', '暗部课程', 'coming_soon', ?, ?, ?)`
-    ).bind(anbuHash, now, now)
+       VALUES ('anbu', '暗部课程', 'coming_soon', 'retired', ?, ?)`
+    ).bind(now, now)
   ];
 
   const lessons = Array.from({ length: 9 }, (_, index) => {
@@ -110,7 +105,7 @@ describe('lesson watch progress API', () => {
 
   it('saves and reads progress for an entitled user', async () => {
     const token = await registerUser('alice');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     const saved = await putProgress(token, 'super-01', { positionSeconds: 412, durationSeconds: 1000 });
     expect(saved.status).toBe(200);
@@ -123,7 +118,7 @@ describe('lesson watch progress API', () => {
 
   it('returns zero progress when nothing has been saved yet', async () => {
     const token = await registerUser('alice');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     const loaded = await getProgress(token, 'super-01');
     expect(loaded.status).toBe(200);
@@ -158,7 +153,7 @@ describe('lesson watch progress API', () => {
 
   it('rejects negative position and non-positive duration', async () => {
     const token = await registerUser('carol');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     const negative = await putProgress(token, 'super-01', { positionSeconds: -1, durationSeconds: 1000 });
     expect(negative.status).toBe(400);
@@ -169,7 +164,7 @@ describe('lesson watch progress API', () => {
 
   it('marks completed at 95 percent and keeps below 95 percent incomplete', async () => {
     const token = await registerUser('dave');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     const completed = await putProgress(token, 'super-01', { positionSeconds: 950, durationSeconds: 1000 });
     expect(completed.status).toBe(200);
@@ -182,7 +177,7 @@ describe('lesson watch progress API', () => {
 
   it('upserts progress by user and lesson', async () => {
     const token = await registerUser('eve');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     await putProgress(token, 'super-01', { positionSeconds: 100, durationSeconds: 1000 });
     const second = await putProgress(token, 'super-01', { positionSeconds: 412, durationSeconds: 1000 });
@@ -199,7 +194,7 @@ describe('lesson watch progress API', () => {
 
   it('returns 404 for an unknown lesson', async () => {
     const token = await registerUser('frank');
-    await unlock(token, 'super', 'super-course-password');
+    await grantEntitlement(token, 'super');
 
     const loaded = await getProgress(token, 'super-99');
     expect(loaded.status).toBe(404);

@@ -3,12 +3,15 @@ import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
 import { AdminCardKeys } from '../features/admin/AdminCardKeys';
 import { AdminComments } from '../features/admin/AdminComments';
+import { AdminContributions } from '../features/admin/AdminContributions';
 import { AdminDashboard } from '../features/admin/AdminDashboard';
 import { AdminMemberships } from '../features/admin/AdminMemberships';
 import { AdminOrders } from '../features/admin/AdminOrders';
+import { AdminOrderCenter } from '../features/admin/AdminOrderCenter';
 import { AdminRevenue } from '../features/admin/AdminRevenue';
 import { AdminSettings } from '../features/admin/AdminSettings';
 import { AdminUsers } from '../features/admin/AdminUsers';
+import { AdminWithdrawals } from '../features/admin/AdminWithdrawals';
 
 interface AdminNavItem {
   to: string;
@@ -18,11 +21,14 @@ interface AdminNavItem {
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { to: '/comments', label: '评论审核' },
+  { to: '/contributions', label: '合作投稿', ownerOnly: true },
   { to: '/card-keys', label: '卡密管理', ownerOnly: true },
   { to: '/dashboard', label: '仪表盘', ownerOnly: true },
   { to: '/orders', label: '订单审核', ownerOnly: true },
+  { to: '/order-center', label: '统一订单', ownerOnly: true },
   { to: '/users', label: '用户管理', ownerOnly: true },
   { to: '/memberships', label: '会员管理', ownerOnly: true },
+  { to: '/withdrawals', label: '余额提现', ownerOnly: true },
   { to: '/revenue', label: '收入统计', ownerOnly: true },
   { to: '/audit', label: '审计记录', ownerOnly: true },
   { to: '/settings', label: '安全设置', ownerOnly: true }
@@ -104,6 +110,10 @@ export function AdminApp() {
       <Route element={<AdminLayout isOwner={isOwner} />}>
         <Route path="/" element={<Navigate to={fallback} replace />} />
         <Route path="/comments" element={<AdminComments />} />
+        <Route
+          path="/contributions"
+          element={isOwner ? <AdminContributions /> : <Navigate to={fallback} replace />}
+        />
         <Route path="/card-keys" element={isOwner ? <AdminCardKeys /> : <Navigate to={fallback} replace />} />
         <Route
           path="/dashboard"
@@ -114,12 +124,20 @@ export function AdminApp() {
           element={isOwner ? <AdminOrders /> : <Navigate to={fallback} replace />}
         />
         <Route
+          path="/order-center"
+          element={isOwner ? <AdminOrderCenter /> : <Navigate to={fallback} replace />}
+        />
+        <Route
           path="/users"
           element={isOwner ? <AdminUsers /> : <Navigate to={fallback} replace />}
         />
         <Route
           path="/memberships"
           element={isOwner ? <AdminMemberships /> : <Navigate to={fallback} replace />}
+        />
+        <Route
+          path="/withdrawals"
+          element={isOwner ? <AdminWithdrawals /> : <Navigate to={fallback} replace />}
         />
         <Route
           path="/revenue"

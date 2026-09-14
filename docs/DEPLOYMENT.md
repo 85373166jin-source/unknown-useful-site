@@ -16,9 +16,12 @@ new frontend is published:
 1. Back up the remote database with `npm run export:data`.
 2. Apply the pending remote migrations, including
    `apps/api/migrations/0004_comments.sql` (comments),
-   `apps/api/migrations/0005_free_product.sql` (the `free` product), and
-   `apps/api/migrations/0006_display_name.sql` (public display names), and
-   `apps/api/migrations/0007_card_keys.sql` (card keys and unified card-key orders).
+   `apps/api/migrations/0005_free_product.sql` (the `free` product),
+   `apps/api/migrations/0006_display_name.sql` (public display names),
+   `apps/api/migrations/0007_card_keys.sql` (card keys and unified card-key orders),
+   `apps/api/migrations/0008_subsites.sql` (sub-sites),
+   `apps/api/migrations/0009_contributions_wallet.sql` (contributions, earnings, withdrawals),
+   and `apps/api/migrations/0010_settlement.sql` (promo attribution and settlement details).
 3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
 4. Only then push the Pages build. Publishing Pages before the matching Worker
    makes the new comment UI call endpoints that do not exist yet.
@@ -138,8 +141,11 @@ its product/status/created and `author_only` visibility indexes, and
 `apps/api/migrations/0005_free_product.sql`, which inserts a legacy DB-only `free` placeholder
 that no longer has a user-facing comment surface. Apply them before deploying the Worker that
 serves the comment endpoints. `0006_display_name.sql` adds the unique public display-name column, and
-`0007_card_keys.sql` adds one-time card keys and card-key orders. Apply them before
-deploying the matching frontend and Worker.
+`0007_card_keys.sql` adds one-time card keys and card-key orders. `0008_subsites.sql`
+adds four sub-site tiers; `0009_contributions_wallet.sql` adds contributions,
+permissions, notifications, earnings, and withdrawals; `0010_settlement.sql` adds
+promo-code attribution and immutable settlement fields. Apply all pending
+migrations before deploying the matching frontend and Worker.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
@@ -173,8 +179,6 @@ Store secrets with Wrangler so they are not committed:
 npx wrangler secret put SESSION_PEPPER
 npx wrangler secret put CONTACT_HMAC_SECRET
 npx wrangler secret put ADMIN_PASSWORD_HASH
-npx wrangler secret put SUPER_COURSE_PASSWORD_HASH
-npx wrangler secret put ANBU_COURSE_PASSWORD_HASH
 npx wrangler secret put ALLOWED_ORIGINS
 ```
 
@@ -189,17 +193,15 @@ Generate `SESSION_PEPPER` and `CONTACT_HMAC_SECRET` with:
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Generate the three password hashes with the same PBKDF2 format the API verifies:
+Generate the admin password hash with the same PBKDF2 format the API verifies:
 
 ```powershell
 $env:PASSWORD = "your-password"
 node --input-type=module -e 'import { webcrypto as crypto } from "node:crypto"; const enc = new TextEncoder(); const pwd = enc.encode(process.env.PASSWORD); const salt = crypto.getRandomValues(new Uint8Array(16)); const key = await crypto.subtle.importKey("raw", pwd, "PBKDF2", false, ["deriveBits"]); const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 100000 }, key, 256); const b64 = (bytes) => Buffer.from(bytes).toString("base64url"); console.log("pbkdf2-sha256$100000$" + b64(salt) + "$" + b64(new Uint8Array(bits)));'
 ```
 
-Use one password each for the admin login, the `super` course password, and the
-`anbu` course password, then put the printed hash into the matching
-`ADMIN_PASSWORD_HASH`, `SUPER_COURSE_PASSWORD_HASH`, or
-`ANBU_COURSE_PASSWORD_HASH` secret.
+Put the printed hash into `ADMIN_PASSWORD_HASH`. Course access is granted only
+through one-time card keys managed in the owner console.
 
 ### CORS origin
 

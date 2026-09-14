@@ -130,19 +130,17 @@ invocations in the Cloudflare dashboard.
 系统只保存卡密哈希；兑换成功后生成 `ORD-` 订单号并授予对应权益。后台可重新输入卡密核验
 状态、使用者和订单号。
 
-## 修改站长和课程凭据
+## 修改站长凭据
 
 Open `/admin/#/settings` to change any of the following without editing the database:
 
 - 站长用户名
 - 站长登录密码
-- 超影课程密码
-- 暗影课程密码
 
 Blank fields are unchanged. Changing the admin username or password invalidates all
-old sessions and returns to the login screen. Changing either course password
-invalidates nothing for existing owners, but future course-password unlocks must
-use the new value. Confirm the change in `/admin/#/audit`.
+old sessions and returns to the login screen. Course access is no longer controlled
+by a shared password; generate one-time card keys from `/admin/#/card-keys`.
+Confirm account changes in `/admin/#/audit`.
 
 ## Password reset
 

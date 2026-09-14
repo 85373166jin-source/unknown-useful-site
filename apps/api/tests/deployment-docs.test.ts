@@ -18,12 +18,15 @@ describe('deployment documentation', () => {
       'VITE_WECHAT_PAYMENT_QR_URL',
       'VITE_ALIPAY_PAYMENT_QR_URL',
       'ADMIN_PASSWORD_HASH',
-      'SUPER_COURSE_PASSWORD_HASH',
-      'ANBU_COURSE_PASSWORD_HASH',
       'ALLOWED_ORIGINS',
       'unknown-useful-site-screenshots',
       'npm run db:migrate:remote',
       'npm run export:data',
+      '0006_display_name.sql',
+      '0007_card_keys.sql',
+      '0008_subsites.sql',
+      '0009_contributions_wallet.sql',
+      '0010_settlement.sql',
       'wrangler rollback',
       'git revert'
     ];

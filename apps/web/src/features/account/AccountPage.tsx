@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { MembershipTier, PartnerLevel, PermissionRole } from '@site/contracts';
-import { ApiError } from '../../lib/api';
+import { CATALOG, type MembershipTier, type PermissionRole, type ProductId } from '@site/contracts';
+import { ApiError, apiFetch } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { SubsitePanel } from './SubsitePanel';
 
@@ -21,14 +21,33 @@ const MEMBERSHIP_TIER_LABELS: Record<MembershipTier, string> = {
   svip: 'SVIP'
 };
 
-const PARTNER_LEVEL_LABELS: Record<PartnerLevel, string> = {
-  none: '未开通',
-  basic: '基础合作商',
-  advanced: '高级合作商',
-  top: '顶级合作商'
+interface PaymentOrder {
+  orderNo: string;
+  productId: ProductId;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+}
+
+interface ContributionItem {
+  id: string;
+  title: string;
+  kind: 'image' | 'video' | 'zip';
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: number;
+}
+
+const PRODUCT_NAMES: Partial<Record<ProductId, string>> = {
+  vip_monthly: 'VIP 会员',
+  svip_monthly: 'SVIP 豪华会员',
+  partner_basic: '基础分站',
+  partner_advanced: '高级分站',
+  partner_top: '顶级分站'
 };
 
-const DEFAULT_PARTNER_LEVEL: PartnerLevel = 'none';
+function productName(productId: ProductId): string {
+  if (productId in CATALOG.products) return CATALOG.products[productId as keyof typeof CATALOG.products].title;
+  return PRODUCT_NAMES[productId] ?? productId;
+}
 
 export function AccountPage() {
   const { user, logout, updateAccount, clearSession } = useAuth();
@@ -41,6 +60,31 @@ export function AccountPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [paidProductIds, setPaidProductIds] = useState<ProductId[]>([]);
+  const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
+  const [contributions, setContributions] = useState<ContributionItem[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    Promise.all([
+      apiFetch<{ unlocked: ProductId[] }>('/entitlements'),
+      apiFetch<{ orders: PaymentOrder[] }>('/orders/mine'),
+      apiFetch<{ contributions: ContributionItem[] }>('/contributions/mine')
+    ])
+      .then(([entitlements, orders, submitted]) => {
+        if (cancelled) return;
+        setPaidProductIds(entitlements.unlocked ?? []);
+        setPaymentOrders(orders.orders ?? []);
+        setContributions(submitted.contributions ?? []);
+      })
+      .catch(() => {
+        // Keep the account page usable when optional history fails to load.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   if (!user) {
     return null;
@@ -54,8 +98,8 @@ export function AccountPage() {
     membershipTier === 'normal' || user.membershipExpiresAt === null
       ? null
       : formatCreatedAt(user.membershipExpiresAt);
-  const partnerLevel: PartnerLevel = user.partnerLevel ?? DEFAULT_PARTNER_LEVEL;
-
+  const pendingOrders = paymentOrders.filter((order) => order.status === 'pending');
+  const pendingContributions = contributions.filter((item) => item.status === 'pending');
   async function handleDisplayNameUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(null);
@@ -300,12 +344,51 @@ export function AccountPage() {
 
       <div className="card">
         <h2>已付费项目</h2>
-        <p className="empty-state">暂无已付费项目</p>
+        {paidProductIds.length === 0 ? (
+          <p className="empty-state">暂无已付费项目</p>
+        ) : (
+          <ul className="comments__list">
+            {paidProductIds.map((productId) => (
+              <li className="comment-item" key={productId}>
+                <strong>{productName(productId)}</strong>
+                <p>已开通</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="card">
         <h2>待审核项目</h2>
-        <p className="empty-state">暂无待审核项目</p>
+        {pendingOrders.length === 0 && pendingContributions.length === 0 ? (
+          <p className="empty-state">暂无待审核项目</p>
+        ) : (
+          <>
+            <p>合计 {pendingOrders.length + pendingContributions.length} 项待审核</p>
+            <h3>付款申请（{pendingOrders.length}）</h3>
+            {pendingOrders.length === 0 ? <p className="empty-state">暂无付款申请</p> : (
+              <ul className="comments__list">
+                {pendingOrders.map((order) => (
+                  <li className="comment-item" key={order.orderNo}>
+                    <strong>{productName(order.productId)}</strong>
+                    <p>订单号：{order.orderNo} · 待审核</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <h3>合作投稿（{pendingContributions.length}）</h3>
+            {pendingContributions.length === 0 ? <p className="empty-state">暂无合作投稿</p> : (
+              <ul className="comments__list">
+                {pendingContributions.map((item) => (
+                  <li className="comment-item" key={item.id}>
+                    <strong>{item.title}</strong>
+                    <p>{item.kind.toUpperCase()} · 待审核</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </div>
     </section>
   );

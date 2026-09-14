@@ -36,6 +36,7 @@ export interface PaymentClaimRow {
 
 export interface InsertPaymentClaimInput {
   id: string;
+  orderId: string;
   orderNo: string;
   userId: string;
   productId: string;
@@ -46,6 +47,12 @@ export interface InsertPaymentClaimInput {
   paidAt: number;
   contactText: string;
   screenshotKey: string;
+  promoCode: string | null;
+  referrerUserId: string | null;
+  contributionId: string | null;
+  subsiteShareBps: number;
+  contributionShareBps: number;
+  earningStatements?: D1PreparedStatement[] | undefined;
   createdAt: number;
   updatedAt: number;
 }
@@ -118,8 +125,8 @@ export async function insertPaymentClaim(
   db: D1Database,
   input: InsertPaymentClaimInput
 ): Promise<PaymentClaimRow> {
-  await db
-    .prepare(
+  await db.batch([
+    db.prepare(
       `INSERT INTO payment_claims (
         id, order_no, user_id, product_id, list_amount_yuan, actual_amount_yuan, list_amount_cents, actual_amount_cents,
         paid_at, contact_text, screenshot_key, status, created_at, updated_at
@@ -139,8 +146,30 @@ export async function insertPaymentClaim(
       input.screenshotKey,
       input.createdAt,
       input.updatedAt
-    )
-    .run();
+    ),
+    db.prepare(
+      `INSERT INTO orders (
+        id, order_no, user_id, product_id, source, status, amount_cents,
+        payment_claim_id, promo_code, referrer_user_id, contribution_id,
+        subsite_share_bps, contribution_share_bps, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, 'payment', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      input.orderId,
+      input.orderNo,
+      input.userId,
+      input.productId,
+      input.actualAmountCents,
+      input.id,
+      input.promoCode,
+      input.referrerUserId,
+      input.contributionId,
+      input.subsiteShareBps,
+      input.contributionShareBps,
+      input.createdAt,
+      input.updatedAt
+    ),
+    ...(input.earningStatements ?? [])
+  ]);
 
   const created = await findPaymentClaimById(db, input.id);
   if (!created) {

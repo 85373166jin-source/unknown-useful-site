@@ -10,8 +10,6 @@ export const SESSION_STORAGE_KEY = 'unknown-useful-site.session';
 export const ADMIN_USERNAME = 'admin';
 export const ADMIN_PASSWORD = 'admin-password-123';
 export const USER_PASSWORD = 'long-password-123';
-export const SUPER_COURSE_PASSWORD = 'super-course-password';
-export const ANBU_COURSE_PASSWORD = 'anbu-course-password';
 
 export const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+2RqAAAAAASUVORK5CYII=',

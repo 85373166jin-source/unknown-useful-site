@@ -13,8 +13,6 @@ export function AdminSettings() {
   const { user, clearSession } = useAuth();
   const [username, setUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [superCoursePassword, setSuperCoursePassword] = useState('');
-  const [anbuCoursePassword, setAnbuCoursePassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -27,8 +25,6 @@ export function AdminSettings() {
     const body: Record<string, string> = {};
     if (username.trim()) body.username = username.trim();
     if (newPassword) body.newPassword = newPassword;
-    if (superCoursePassword) body.superCoursePassword = superCoursePassword;
-    if (anbuCoursePassword) body.anbuCoursePassword = anbuCoursePassword;
 
     if (Object.keys(body).length === 0) {
       setError('请至少填写一项需要修改的设置');
@@ -44,8 +40,6 @@ export function AdminSettings() {
 
       setUsername('');
       setNewPassword('');
-      setSuperCoursePassword('');
-      setAnbuCoursePassword('');
 
       if (result.requireLogin) {
         clearSession();
@@ -56,7 +50,7 @@ export function AdminSettings() {
         return;
       }
 
-      setNotice('课程密码已更新，用户下次解锁时需要使用新密码');
+      setNotice('安全设置已更新');
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '安全设置保存失败，请稍后重试');
     } finally {
@@ -99,32 +93,6 @@ export function AdminSettings() {
             minLength={8}
             maxLength={128}
             autoComplete="new-password"
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="admin-security-super-password">新超影课程密码</label>
-          <input
-            id="admin-security-super-password"
-            value={superCoursePassword}
-            onChange={(event) => setSuperCoursePassword(event.target.value)}
-            placeholder="至少 8 位，留空不修改"
-            minLength={8}
-            maxLength={128}
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="admin-security-anbu-password">新暗影课程密码</label>
-          <input
-            id="admin-security-anbu-password"
-            value={anbuCoursePassword}
-            onChange={(event) => setAnbuCoursePassword(event.target.value)}
-            placeholder="至少 8 位，留空不修改"
-            minLength={8}
-            maxLength={128}
-            autoComplete="off"
           />
         </div>
 

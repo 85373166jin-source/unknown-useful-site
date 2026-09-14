@@ -41,6 +41,8 @@ ordersRoutes.post('/', bearerAuth, async (c) => {
   const productId = stringField(form, 'productId');
   const paidAt = stringField(form, 'paidAt');
   const contactText = stringField(form, 'contactText');
+  const promoCodeValue = form.get('promoCode');
+  const promoCode = typeof promoCodeValue === 'string' ? promoCodeValue.trim() : undefined;
   const screenshot = fileField(form, 'screenshot');
 
   const parsedProductId = ProductIdSchema.safeParse(productId);
@@ -52,7 +54,8 @@ ordersRoutes.post('/', bearerAuth, async (c) => {
     productId: parsedProductId.data,
     paidAt,
     contactText,
-    screenshot
+    screenshot,
+    promoCode
   });
 
   return c.json(toPaymentClaimPayload(claim), 201);

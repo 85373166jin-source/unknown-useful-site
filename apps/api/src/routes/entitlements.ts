@@ -1,40 +1,17 @@
-import { Hono, type Context } from 'hono';
-import { z } from 'zod';
+import { Hono } from 'hono';
 import type { AppEnv } from '../middleware/auth';
 import { bearerAuth } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
-import { listUnlockedProductIds, unlockSeriesWithPassword } from '../services/entitlements';
-
-const unlockSchema = z.object({
-  seriesId: z.enum(['super', 'anbu']),
-  password: z.string().min(1)
-});
-
-async function readJson(c: Context<AppEnv>): Promise<unknown> {
-  try {
-    return await c.req.json();
-  } catch {
-    throw new ApiError('invalid_json', 'Request body must be valid JSON', 400);
-  }
-}
+import { listUnlockedProductIds } from '../services/entitlements';
 
 export const entitlementsRoutes = new Hono<AppEnv>();
 
-entitlementsRoutes.get('/', bearerAuth, async (c) => {
-  return c.json({ unlocked: await listUnlockedProductIds(c.env, c.get('userId')) });
-});
+entitlementsRoutes.get('/', bearerAuth, async (c) =>
+  c.json({ unlocked: await listUnlockedProductIds(c.env, c.get('userId')) })
+);
 
-entitlementsRoutes.post('/unlock', bearerAuth, async (c) => {
-  const parsed = unlockSchema.safeParse(await readJson(c));
-  if (!parsed.success) {
-    throw new ApiError('invalid_request', 'Request validation failed', 400);
-  }
-
-  const payload = await unlockSeriesWithPassword(
-    c.env,
-    c.get('userId'),
-    parsed.data.seriesId,
-    parsed.data.password
-  );
-  return c.json(payload, 200);
+// Keep the old route explicit so old clients receive a clear migration signal
+// instead of silently using the retired course-password flow.
+entitlementsRoutes.post('/unlock', bearerAuth, () => {
+  throw new ApiError('card_key_required', '课程密码已下线，请使用一次性卡密', 410);
 });

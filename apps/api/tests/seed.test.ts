@@ -16,8 +16,6 @@ function makeSeedEnv(seedToken?: string): Env {
     CONTACT_HMAC_SECRET: 'test-contact-secret',
     ADMIN_USERNAME: 'admin',
     ADMIN_PASSWORD_HASH: 'test-admin-password-hash',
-    SUPER_COURSE_PASSWORD_HASH: 'test-super-course-hash',
-    ANBU_COURSE_PASSWORD_HASH: 'test-anbu-course-hash',
     ALLOWED_ORIGINS: 'https://example.com'
   };
 

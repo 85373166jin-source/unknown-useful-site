@@ -68,7 +68,7 @@ function sqlQuote(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function buildSeedSql(superHash, anbuHash, adminHash) {
+function buildSeedSql(adminHash) {
   const now = Date.now();
   const lines = [];
 
@@ -89,14 +89,14 @@ function buildSeedSql(superHash, anbuHash, adminHash) {
   };
   insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '9 个视频、在线播放、下载、进度同步');
   insertProduct('bundle', '火影合集', 49, 'presale', 'courses', 2, '超影课程权益加暗部课程权益');
-  insertProduct('anbu', '暗部课程', 29, 'coming_soon', 'courses', 3, '素材到位后配置视频与课程密码');
+  insertProduct('anbu', '暗部课程', 29, 'coming_soon', 'courses', 3, '素材到位后配置视频与一次性卡密');
   insertProduct('vip_monthly', 'VIP 会员', 10, 'active', 'memberships', 4, 'VIP 会员 30 天', 990, 'membership');
   insertProduct('svip_monthly', 'SVIP 豪华会员', 20, 'active', 'memberships', 5, 'SVIP 豪华会员 30 天', 1990, 'membership');
   lines.push(
-    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('super', '超影课程', 'active', ${sqlQuote(superHash)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, course_password_hash = excluded.course_password_hash, updated_at = excluded.updated_at;`
+    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('super', '超影课程', 'active', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
   );
   lines.push(
-    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'coming_soon', ${sqlQuote(anbuHash)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, course_password_hash = excluded.course_password_hash, updated_at = excluded.updated_at;`
+    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'coming_soon', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
   );
 
   for (let order = 1; order <= 9; order += 1) {
@@ -127,12 +127,8 @@ fs.rmSync(stateDir, { recursive: true, force: true });
 
 runWrangler(['d1', 'migrations', 'apply', 'DB', '--local']);
 
-const [superHash, anbuHash, adminHash] = await Promise.all([
-  hashPassword('super-course-password'),
-  hashPassword('anbu-course-password'),
-  hashPassword('admin-password-123')
-]);
+const adminHash = await hashPassword('admin-password-123');
 
-fs.writeFileSync(seedSqlPath, buildSeedSql(superHash, anbuHash, adminHash), 'utf8');
+fs.writeFileSync(seedSqlPath, buildSeedSql(adminHash), 'utf8');
 runWrangler(['d1', 'execute', 'DB', '--local', '--file', seedSqlPath]);
 console.log('Local D1 migrations and E2E seed completed.');

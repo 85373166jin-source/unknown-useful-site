@@ -5,7 +5,7 @@ import { listActiveEntitlementsForUser } from '../repositories/learning';
 import { findUserById, updateUserMembership } from '../repositories/users';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
 import { buildUpsertSubsiteStatement, type SubsiteTier } from './subsites';
-import { findCardKeyByHash, insertCardKeyBatch, buildInsertCardKeyStatement, verifyCardKeyByHash } from '../repositories/card-keys';
+import { findCardKeyByHash, buildInsertCardKeyStatement, verifyCardKeyByHash } from '../repositories/card-keys';
 
 export const CARD_KEY_VALID_MS = 30 * 24 * 60 * 60 * 1000;
 const CARD_KEY_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -61,12 +61,22 @@ export async function generateCardKeys(
   const rows = await Promise.all(codes.map(async (code) => ({
     id: crypto.randomUUID(), batchId, productId: product.id, codeHash: await hashCardKey(code, env.SESSION_PEPPER), expiresAt, createdAt: now
   })));
-  await insertCardKeyBatch(env.DB, { id: batchId, productId: product.id, quantity: input.quantity, expiresAt, note: input.note?.trim() || null, createdBy: actorUserId, createdAt: now });
-  try {
-    await env.DB.batch(rows.map((row) => buildInsertCardKeyStatement(env.DB, row)));
-  } catch (error) {
-    throw error;
-  }
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO card_key_batches
+        (id, product_id, quantity, expires_at, note, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      batchId,
+      product.id,
+      input.quantity,
+      expiresAt,
+      input.note?.trim() || null,
+      actorUserId,
+      now
+    ),
+    ...rows.map((row) => buildInsertCardKeyStatement(env.DB, row))
+  ]);
   return { batchId, productId: product.id, expiresAt, codes };
 }
 
@@ -84,6 +94,22 @@ export async function redeemCardKey(env: Env, userId: string, code: string) {
 
   const product = await findProductById(env.DB, key.product_id);
   if (!product) throw new ApiError('invalid_product', 'Product not found', 404);
+  if (product.product_type === 'partner_opening') {
+    const existing = await env.DB.prepare('SELECT tier FROM subsites WHERE user_id = ?')
+      .bind(userId)
+      .first<{ tier: SubsiteTier }>();
+    const rank: Record<SubsiteTier, number> = { free: 0, basic: 1, advanced: 2, top: 3 };
+    const tierMap: Record<string, SubsiteTier> = {
+      partner_basic: 'basic',
+      partner_advanced: 'advanced',
+      partner_top: 'top'
+    };
+    const tier = tierMap[product.id];
+    if (!tier) throw new ApiError('invalid_product', 'Unsupported sub-site product', 400);
+    if (existing && rank[existing.tier] >= rank[tier]) {
+      throw new ApiError('already_owned', '当前分站档次已达到或高于该卡密档次', 409);
+    }
+  }
   const now = Date.now();
   const orderId = crypto.randomUUID();
   const newOrderNo = orderNo(now);

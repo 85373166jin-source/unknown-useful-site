@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CATALOG, centsToYuanString, type CourseProductId } from '@site/contracts';
+import { CATALOG, centsToYuanString, type CourseProductId, type ProductId } from '@site/contracts';
 import { ApiError, apiFetch } from '../../lib/api';
 
-type ClaimableProductId = CourseProductId | 'vip_monthly' | 'svip_monthly';
+type ClaimableProductId = ProductId;
 
 interface ClaimableProduct {
   id: ClaimableProductId;
@@ -32,7 +32,13 @@ const MEMBERSHIP_PRODUCTS: ClaimableProduct[] = [
   { id: 'svip_monthly', title: 'SVIP 豪华会员', status: 'active' }
 ];
 
-const CLAIMABLE_PRODUCTS = [...COURSE_PRODUCTS, ...MEMBERSHIP_PRODUCTS];
+const PARTNER_PRODUCTS: ClaimableProduct[] = [
+  { id: 'partner_basic', title: '基础分站', status: 'active' },
+  { id: 'partner_advanced', title: '高级分站', status: 'active' },
+  { id: 'partner_top', title: '顶级分站', status: 'active' }
+];
+
+const CLAIMABLE_PRODUCTS = [...COURSE_PRODUCTS, ...MEMBERSHIP_PRODUCTS, ...PARTNER_PRODUCTS];
 
 const CLAIMABLE_PRODUCT_IDS = new Set<ClaimableProductId>(
   CLAIMABLE_PRODUCTS.map((product) => product.id)
@@ -81,6 +87,7 @@ export function PaymentClaimPage() {
   const [productId, setProductId] = useState<ClaimableProductId>(initialProductId);
   const [paidAt, setPaidAt] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [contactText, setContactText] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +152,7 @@ export function PaymentClaimPage() {
       form.set('productId', productId);
       form.set('paidAt', paidAtIso);
       form.set('contactText', contactText.trim());
+      if (promoCode.trim()) form.set('promoCode', promoCode.trim().toUpperCase());
       form.set('screenshot', screenshot);
 
       const claim = await apiFetch<ClaimPayload>('/orders', {
@@ -256,6 +264,17 @@ export function PaymentClaimPage() {
               onChange={(event) => setContactText(event.target.value)}
               placeholder="用于管理员联系你，例如邮箱或手机号"
               required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="payment-promo-code">推广码（可选）</label>
+            <input
+              id="payment-promo-code"
+              type="text"
+              value={promoCode}
+              onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
+              placeholder="有分站推广码时填写，例如 SITE-XXXXXXXX"
             />
           </div>
 

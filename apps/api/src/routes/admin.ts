@@ -112,9 +112,7 @@ const resetPasswordSchema = z.object({
 const adminSecuritySchema = z
   .object({
     username: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
-    newPassword: z.string().min(8).max(128).optional(),
-    superCoursePassword: z.string().min(8).max(128).optional(),
-    anbuCoursePassword: z.string().min(8).max(128).optional()
+    newPassword: z.string().min(8).max(128).optional()
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'Specify at least one security setting'
@@ -491,9 +489,7 @@ adminRoutes.patch('/security', bearerAuth, requireOwner, async (c) => {
   const passwordChanged = input.newPassword !== undefined;
   const before = {
     username: current.username,
-    passwordChanged: false,
-    superCoursePasswordChanged: false,
-    anbuCoursePasswordChanged: false
+    passwordChanged: false
   };
 
   if (input.username !== undefined && usernameChanged) {
@@ -513,26 +509,6 @@ adminRoutes.patch('/security', bearerAuth, requireOwner, async (c) => {
   if (input.newPassword !== undefined) {
     statements.push(buildUpdateUserPasswordStatement(c.env.DB, current.id, await hashPassword(input.newPassword), now));
     statements.push(buildDeleteAllSessionsStatement(c.env.DB, current.id));
-  }
-
-  if (input.superCoursePassword !== undefined) {
-    statements.push(
-      c.env.DB.prepare('UPDATE series SET course_password_hash = ?, updated_at = ? WHERE id = ?').bind(
-        await hashPassword(input.superCoursePassword),
-        now,
-        'super'
-      )
-    );
-  }
-
-  if (input.anbuCoursePassword !== undefined) {
-    statements.push(
-      c.env.DB.prepare('UPDATE series SET course_password_hash = ?, updated_at = ? WHERE id = ?').bind(
-        await hashPassword(input.anbuCoursePassword),
-        now,
-        'anbu'
-      )
-    );
   }
 
   if (statements.length > 0) {
@@ -555,9 +531,7 @@ adminRoutes.patch('/security', bearerAuth, requireOwner, async (c) => {
     before,
     after: {
       username: input.username ?? current.username,
-      passwordChanged,
-      superCoursePasswordChanged: input.superCoursePassword !== undefined,
-      anbuCoursePasswordChanged: input.anbuCoursePassword !== undefined
+      passwordChanged
     }
   });
 

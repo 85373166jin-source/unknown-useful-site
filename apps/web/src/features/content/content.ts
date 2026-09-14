@@ -31,7 +31,7 @@ export const STATIC_CONTENT: Record<ContentKey, StaticContent> = {
       },
       {
         heading: '账号与权益',
-        paragraphs: ['课程密码和付款购买都会绑定到当前账号，登录后可以跨设备继续观看已拥有的内容。']
+        paragraphs: ['卡密和付款购买都会绑定到当前账号，登录后可以跨设备继续观看已拥有的内容。']
       }
     ]
   },
@@ -45,17 +45,17 @@ export const STATIC_CONTENT: Record<ContentKey, StaticContent> = {
       },
       {
         heading: '人工处理',
-        paragraphs: ['审核和密码发放由站长人工完成，通常会在看到申请后尽快处理。']
+        paragraphs: ['审核和卡密生成由站长人工完成，通常会在看到申请后尽快处理。']
       }
     ]
   },
   'purchase-help': {
     title: '购买说明',
-    intro: '课程支持课程密码解锁和收款码付款两种方式，付款后由站长人工审核。',
+    intro: '课程支持一次性卡密解锁和收款码付款两种方式，付款后由站长人工审核。',
     blocks: [
       {
-        heading: '使用课程密码观看',
-        paragraphs: ['输入正确课程密码后，课程会永久绑定当前账号，之后无需重复输入。']
+        heading: '使用卡密观看',
+        paragraphs: ['输入未使用且在有效期内的卡密后，课程会永久绑定当前账号；每个卡密只能使用一次。']
       },
       {
         heading: '收款码付款',
@@ -66,8 +66,8 @@ export const STATIC_CONTENT: Record<ContentKey, StaticContent> = {
         paragraphs: ['付款完成后填写付款时间、联系方式，并上传付款截图。']
       },
       {
-        heading: '人工发放课程密码',
-        paragraphs: ['管理员核对到账后会审核订单，并人工发放课程密码或直接开通课程权益。']
+        heading: '后台生成卡密',
+        paragraphs: ['管理员核对到账后会审核订单；需要卡密时可在站长后台按商品生成，并直接开通对应权益。']
       }
     ]
   },

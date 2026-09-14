@@ -54,6 +54,24 @@ describe('database schema', () => {
     ]);
   });
 
+  it('stores order attribution and immutable earning settlement fields', async () => {
+    const orderColumns = await env.DB.prepare('PRAGMA table_info(orders)').all<{ name: string }>();
+    expect(orderColumns.results?.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        'promo_code',
+        'referrer_user_id',
+        'contribution_id',
+        'subsite_share_bps',
+        'contribution_share_bps'
+      ])
+    );
+
+    const earningColumns = await env.DB.prepare('PRAGMA table_info(earning_entries)').all<{ name: string }>();
+    expect(earningColumns.results?.map((row) => row.name)).toEqual(
+      expect.arrayContaining(['withdrawal_id', 'gross_amount_cents', 'share_bps'])
+    );
+  });
+
   it('enforces one active entitlement per user and product', async () => {
     await env.DB.prepare("INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('u1', 'u1', 'hash', 'user', 'active', 1, 1)").run();
     await env.DB.prepare("INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, created_at, updated_at) VALUES ('super', '超影课程', 29, 'active', 'courses', 1, 1, 1)").run();

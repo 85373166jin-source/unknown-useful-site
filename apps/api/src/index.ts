@@ -15,6 +15,7 @@ import { adminCardKeyRoutes, cardKeyRoutes } from './routes/card-keys';
 import { subsitesRoutes } from './routes/subsites';
 import { adminContributionsRoutes, contributionsRoutes } from './routes/contributions';
 import { adminWalletRoutes, walletRoutes } from './routes/wallet';
+import { adminOrderCenterRoutes } from './routes/order-center';
 import { cleanupExpiredData } from './services/comments';
 
 for (const product of Object.values(CATALOG.products)) {
@@ -71,6 +72,7 @@ app.route('/api/v1/contributions', contributionsRoutes);
 app.route('/api/v1/admin/contributions', adminContributionsRoutes);
 app.route('/api/v1/wallet', walletRoutes);
 app.route('/api/v1/admin/wallet', adminWalletRoutes);
+app.route('/api/v1/admin/order-center', adminOrderCenterRoutes);
 app.route('/api/v1/progress', progressRoutes);
 app.route('/api/v1', commentsRoutes);
 app.route('/api/v1/admin', adminRoutes);

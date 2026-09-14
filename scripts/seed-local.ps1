@@ -2,8 +2,6 @@
 param(
   [string]$AdminUsername,
   [string]$AdminPasswordHash,
-  [string]$SuperCoursePasswordHash,
-  [string]$AnbuCoursePasswordHash,
   [string]$SeedToken
 )
 
@@ -21,12 +19,6 @@ if (-not $AdminUsername) {
 }
 if (-not $AdminPasswordHash) {
   $AdminPasswordHash = if ($env:ADMIN_PASSWORD_HASH) { $env:ADMIN_PASSWORD_HASH } else { 'local-dev-admin-hash' }
-}
-if (-not $SuperCoursePasswordHash) {
-  $SuperCoursePasswordHash = if ($env:SUPER_COURSE_PASSWORD_HASH) { $env:SUPER_COURSE_PASSWORD_HASH } else { 'local-dev-super-hash' }
-}
-if (-not $AnbuCoursePasswordHash) {
-  $AnbuCoursePasswordHash = if ($env:ANBU_COURSE_PASSWORD_HASH) { $env:ANBU_COURSE_PASSWORD_HASH } else { 'local-dev-anbu-hash' }
 }
 if (-not $SeedToken) {
   $SeedToken = if ($env:SEED_TOKEN) { $env:SEED_TOKEN } else { New-SeedToken }
@@ -55,8 +47,6 @@ $wranglerArgs = @(
   '--ip', '127.0.0.1',
   '--port', "$port",
   '--show-interactive-dev-session', 'false',
-  '--var', "SUPER_COURSE_PASSWORD_HASH:$SuperCoursePasswordHash",
-  '--var', "ANBU_COURSE_PASSWORD_HASH:$AnbuCoursePasswordHash",
   '--var', "ADMIN_PASSWORD_HASH:$AdminPasswordHash",
   '--var', "ADMIN_USERNAME:$AdminUsername",
   '--var', "SEED_TOKEN:$SeedToken"
