@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
+import { AdminCardKeys } from '../features/admin/AdminCardKeys';
 import { AdminComments } from '../features/admin/AdminComments';
 import { AdminDashboard } from '../features/admin/AdminDashboard';
 import { AdminMemberships } from '../features/admin/AdminMemberships';
@@ -17,6 +18,7 @@ interface AdminNavItem {
 
 const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { to: '/comments', label: '评论审核' },
+  { to: '/card-keys', label: '卡密管理', ownerOnly: true },
   { to: '/dashboard', label: '仪表盘', ownerOnly: true },
   { to: '/orders', label: '订单审核', ownerOnly: true },
   { to: '/users', label: '用户管理', ownerOnly: true },
@@ -102,6 +104,7 @@ export function AdminApp() {
       <Route element={<AdminLayout isOwner={isOwner} />}>
         <Route path="/" element={<Navigate to={fallback} replace />} />
         <Route path="/comments" element={<AdminComments />} />
+        <Route path="/card-keys" element={isOwner ? <AdminCardKeys /> : <Navigate to={fallback} replace />} />
         <Route
           path="/dashboard"
           element={isOwner ? <AdminDashboard /> : <Navigate to={fallback} replace />}

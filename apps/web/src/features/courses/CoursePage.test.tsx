@@ -15,7 +15,7 @@ describe('CoursePage', () => {
 
     expect(screen.getByText('超影课程')).toBeInTheDocument();
     expect(screen.getByText('暗部课程')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '使用课程密码观看' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '使用卡密观看' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '购买课程' })).toBeInTheDocument();
   });
 
@@ -75,17 +75,17 @@ describe('CoursePage', () => {
     render(<CoursePage />, { wrapper: TestProviders });
 
     const superCourse = screen.getByText('超影课程').closest('article')!;
-    const toggle = within(superCourse).getByRole('button', { name: '使用课程密码观看' });
+    const toggle = within(superCourse).getByRole('button', { name: '使用卡密观看' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(within(superCourse).getByLabelText('课程密码')).toBeInTheDocument();
+    expect(within(superCourse).getByLabelText('卡密')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
-    expect(within(superCourse).queryByLabelText('课程密码')).not.toBeInTheDocument();
+    expect(within(superCourse).queryByLabelText('卡密')).not.toBeInTheDocument();
   });
 
   it('renders comment sections for super and anbu only', async () => {

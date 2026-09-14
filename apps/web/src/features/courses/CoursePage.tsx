@@ -12,6 +12,7 @@ interface EntitlementsPayload {
 
 interface UnlockPayload {
   unlocked: SeriesId[];
+  orderNo: string;
 }
 
 const SERIES_LIST = Object.values(CATALOG.series) as Series[];
@@ -35,7 +36,7 @@ export function CoursePage() {
   const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState<SeriesId[]>([]);
   const [activeSeries, setActiveSeries] = useState<Series | null>(null);
-  const [password, setPassword] = useState('');
+  const [cardCode, setCardCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -72,14 +73,14 @@ export function CoursePage() {
       return;
     }
     setActiveSeries(series);
-    setPassword('');
+    setCardCode('');
     setError(null);
     setNotice(null);
   }
 
   function closeUnlock(): void {
     setActiveSeries(null);
-    setPassword('');
+    setCardCode('');
     setError(null);
   }
 
@@ -93,12 +94,12 @@ export function CoursePage() {
     setNotice(null);
     setSubmitting(true);
     try {
-      const payload = await apiFetch<UnlockPayload>('/entitlements/unlock', {
+      const payload = await apiFetch<UnlockPayload>('/card-keys/redeem', {
         method: 'POST',
-        body: { seriesId: activeSeries.id, password }
+        body: { code: cardCode }
       });
       setUnlocked(payload.unlocked ?? []);
-      setNotice(`${activeSeries.title} 已解锁`);
+      setNotice(`${activeSeries.title} 已解锁，订单号 ${payload.orderNo}`);
       closeUnlock();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : '请求失败，请稍后重试');
@@ -111,7 +112,7 @@ export function CoursePage() {
     <section className="course-page">
       <header className="course-page__header">
         <h1>火影课程</h1>
-        <p className="course-page__intro">超影课程与暗部课程，使用课程密码或购买后永久绑定当前账号</p>
+        <p className="course-page__intro">超影课程与暗部课程，使用卡密或购买后永久绑定当前账号</p>
       </header>
 
       {notice ? (
@@ -140,7 +141,7 @@ export function CoursePage() {
                     aria-controls={`course-unlock-${series.id}`}
                     onClick={() => toggleUnlock(series)}
                   >
-                    使用课程密码观看
+                    使用卡密观看
                   </button>
                   <button type="button" onClick={() => navigate(`/payment-claim?productId=${series.id}`)}>
                     购买课程
@@ -151,7 +152,7 @@ export function CoursePage() {
                 <form
                   id={`course-unlock-${series.id}`}
                   className="course-unlock"
-                  aria-label={`${series.title}课程密码`}
+                  aria-label={`${series.title}卡密兑换`}
                   onSubmit={submitUnlock}
                 >
                   {error ? (
@@ -160,13 +161,13 @@ export function CoursePage() {
                     </div>
                   ) : null}
                   <div className="field">
-                    <label htmlFor={`course-password-${series.id}`}>课程密码</label>
+                    <label htmlFor={`course-card-code-${series.id}`}>卡密</label>
                     <input
-                      id={`course-password-${series.id}`}
-                      name="password"
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
+                      id={`course-card-code-${series.id}`}
+                      name="cardCode"
+                      type="text"
+                      value={cardCode}
+                      onChange={(event) => setCardCode(event.target.value)}
                       autoComplete="off"
                       required
                     />

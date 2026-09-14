@@ -1,6 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types';
 
 export const TABLES_TO_CLEAR = [
+  'orders',
+  'card_keys',
+  'card_key_batches',
   'comments',
   'watch_progress',
   'login_events',
