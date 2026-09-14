@@ -52,10 +52,6 @@ interface SubsiteState {
   tier: 'free' | 'basic' | 'advanced' | 'top';
 }
 
-interface NotificationItem {
-  read_at: number | null;
-}
-
 const POSITION_OPTIONS = [
   { name: '普通用户', description: '浏览内容、评论、购买课程、投稿和申请加入分站。' },
   { name: '免费分站', description: '推广收益 1%，适合先体验推广和订单归属。' },
@@ -98,7 +94,6 @@ export function AccountPage() {
   const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
   const [contributions, setContributions] = useState<ContributionItem[]>([]);
   const [hasSubsite, setHasSubsite] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [walletAvailableCents, setWalletAvailableCents] = useState(0);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [showPositions, setShowPositions] = useState(false);
@@ -112,18 +107,14 @@ export function AccountPage() {
       apiFetch<{ orders: PaymentOrder[] }>('/orders/mine'),
       apiFetch<{ contributions: ContributionItem[] }>('/contributions/mine'),
       apiFetch<{ subsite: SubsiteState | null }>('/subsites/me'),
-      apiFetch<{ notifications: NotificationItem[] }>('/wallet/notifications'),
       apiFetch<{ summary: { availableCents: number } }>('/wallet')
     ])
-      .then(([entitlements, orders, submitted, subsitePayload, notificationPayload, walletPayload]) => {
+      .then(([entitlements, orders, submitted, subsitePayload, walletPayload]) => {
         if (cancelled) return;
         setPaidProductIds(entitlements.unlocked ?? []);
         setPaymentOrders(orders.orders ?? []);
         setContributions(submitted.contributions ?? []);
         setHasSubsite(Boolean(subsitePayload.subsite));
-        setUnreadNotifications(
-          (notificationPayload.notifications ?? []).filter((item) => item.read_at === null).length
-        );
         setWalletAvailableCents(walletPayload.summary?.availableCents ?? 0);
       })
       .catch(() => {
@@ -262,11 +253,6 @@ export function AccountPage() {
       <div className="account-page__header">
         <h1>用户中心</h1>
         <div className="account-page__actions">
-          <Link className="button button--primary" to="/contribute">合作投稿</Link>
-          <Link className="button button--primary account-notification-button" to="/notifications" aria-label="查看通知">
-            通知
-            {unreadNotifications > 0 ? <span className="account-notification-button__badge">{unreadNotifications}</span> : null}
-          </Link>
           <button type="button" className="button" onClick={() => void handleLogout()}>
             退出登录
           </button>

@@ -64,8 +64,6 @@ describe('AccountPage', () => {
     expect(screen.getByText(/会员剩余 23 天/)).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
     expect(screen.getByText(/未加入/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '合作投稿' })).toHaveAttribute('href', '/contribute');
-    expect(screen.getByRole('link', { name: '查看通知' })).toHaveAttribute('href', '/notifications');
     expect(screen.getByText('免费分站')).toBeInTheDocument();
     expect(screen.getByText('基础分站')).toBeInTheDocument();
     expect(screen.getByText('高级分站')).toBeInTheDocument();

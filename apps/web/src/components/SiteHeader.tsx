@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 
 const NAV_ITEMS = [
@@ -11,6 +13,25 @@ const NAV_ITEMS = [
 
 export function SiteHeader() {
   const { user, logout } = useAuth();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadNotifications(0);
+      return;
+    }
+    let cancelled = false;
+    Promise.resolve(apiFetch<{ notifications: Array<{ read_at: number | null }> }>('/wallet/notifications'))
+      .then((payload) => {
+        if (!cancelled) {
+          setUnreadNotifications((payload.notifications ?? []).filter((item) => item.read_at === null).length);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   return (
     <header className="site-header">
@@ -25,6 +46,11 @@ export function SiteHeader() {
         ))}
         {user ? (
           <>
+            <Link to="/contribute">合作投稿</Link>
+            <Link to="/notifications" className="site-header__notification">
+              通知
+              {unreadNotifications > 0 ? <span className="site-header__badge">{unreadNotifications}</span> : null}
+            </Link>
             <Link to="/account">用户中心</Link>
             <button type="button" className="site-header__logout" onClick={() => void logout()}>
               退出
