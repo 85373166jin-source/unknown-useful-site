@@ -4,6 +4,7 @@ import { findProductById, listProductComponentIds } from '../repositories/orders
 import { listActiveEntitlementsForUser } from '../repositories/learning';
 import { findUserById, updateUserMembership } from '../repositories/users';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
+import { buildUpsertSubsiteStatement, type SubsiteTier } from './subsites';
 import { findCardKeyByHash, insertCardKeyBatch, buildInsertCardKeyStatement, verifyCardKeyByHash } from '../repositories/card-keys';
 
 export const CARD_KEY_VALID_MS = 30 * 24 * 60 * 60 * 1000;
@@ -126,6 +127,11 @@ export async function redeemCardKey(env: Env, userId: string, code: string) {
         ).bind(crypto.randomUUID(), userId, productId, now, orderId)
       );
     }
+  } else if (product.product_type === 'partner_opening') {
+    const tierMap: Record<string, SubsiteTier> = { partner_basic: 'basic', partner_advanced: 'advanced', partner_top: 'top' };
+    const tier = tierMap[product.id];
+    if (!tier) throw new ApiError('invalid_product', 'Unsupported sub-site product', 400);
+    statements.push(buildUpsertSubsiteStatement(env.DB, userId, tier, now));
   } else {
     throw new ApiError('invalid_product', 'Unsupported product type', 400);
   }

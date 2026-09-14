@@ -12,7 +12,7 @@ export const SUBSITE_SHARES: Record<SubsiteTier, number> = {
 
 export interface SubsitePayload { tier: SubsiteTier; promoCode: string; userSharePercent: number; }
 
-function promoCode(userId: string): string {
+export function promoCodeForUser(userId: string): string {
   const suffix = userId.replace(/-/g, '').slice(0, 8).toUpperCase();
   return `SITE-${suffix}`;
 }
@@ -27,7 +27,7 @@ export async function joinFreeSubsite(env: Env, userId: string): Promise<Subsite
   const existing = await getMySubsite(env, userId);
   if (existing) return existing;
   const now = Date.now();
-  const code = promoCode(userId);
+  const code = promoCodeForUser(userId);
   try {
     await env.DB.prepare(
       'INSERT INTO subsites (user_id, tier, promo_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
@@ -36,4 +36,12 @@ export async function joinFreeSubsite(env: Env, userId: string): Promise<Subsite
     throw new ApiError('subsite_conflict', 'Unable to create sub-site', 409);
   }
   return { tier: 'free', promoCode: code, userSharePercent: SUBSITE_SHARES.free };
+}
+
+export function buildUpsertSubsiteStatement(db: import('@cloudflare/workers-types').D1Database, userId: string, tier: SubsiteTier, now: number) {
+  return db.prepare(
+    `INSERT INTO subsites (user_id, tier, promo_code, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET tier = excluded.tier, updated_at = excluded.updated_at`
+  ).bind(userId, tier, promoCodeForUser(userId), now, now);
 }
