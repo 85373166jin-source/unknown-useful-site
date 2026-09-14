@@ -361,12 +361,13 @@ describe('comments API', () => {
     expect(quota?.count).toBe(4);
   });
 
-  it('rejects comments on membership products and the legacy free resource product', async () => {
+  it('rejects comments on membership, bundle, and legacy free products', async () => {
     const alice = await registerUser('alice');
     await seedProduct('vip_monthly', 'membership');
+    await seedProduct('bundle', 'course');
     await seedProduct('free', 'other');
 
-    for (const productId of ['vip_monthly', 'free']) {
+    for (const productId of ['vip_monthly', 'bundle', 'free']) {
       await expectError(
         await app.request(`/api/v1/products/${productId}/comments`, {}, env),
         404,

@@ -53,7 +53,7 @@ const COMMENT_AUTHOR_COLUMNS =
 
 export async function productExists(db: D1Database, productId: string): Promise<boolean> {
   const row = await db
-    .prepare("SELECT id FROM products WHERE id = ? AND product_type IN ('course', 'digital')")
+    .prepare("SELECT id FROM products WHERE id = ? AND id != 'bundle' AND product_type IN ('course', 'digital')")
     .bind(productId)
     .first<{ id: string }>();
   return row !== null;

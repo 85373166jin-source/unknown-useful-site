@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '../../test/TestProviders';
 import { CoursePage } from './CoursePage';
@@ -55,7 +55,40 @@ describe('CoursePage', () => {
     expect(within(darkCourse).getByText('待上线')).toBeInTheDocument();
   });
 
-  it('renders a comment section for super, anbu, and bundle', async () => {
+  it('reveals the password form inside the matching course card', async () => {
+    window.localStorage.setItem('unknown-useful-site.session', 'token');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const body = String(input).includes('/comments')
+          ? { comments: [], canComment: false, currentStatus: 'guest' }
+          : { unlocked: [] };
+        return Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          })
+        );
+      })
+    );
+
+    render(<CoursePage />, { wrapper: TestProviders });
+
+    const superCourse = screen.getByText('超影课程').closest('article')!;
+    const toggle = within(superCourse).getByRole('button', { name: '使用课程密码观看' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(superCourse).getByLabelText('课程密码')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(within(superCourse).queryByLabelText('课程密码')).not.toBeInTheDocument();
+  });
+
+  it('renders comment sections for super and anbu only', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -72,8 +105,8 @@ describe('CoursePage', () => {
 
     expect(screen.getByRole('heading', { name: '超影课程评论' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '暗部课程评论' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '火影合集评论' })).toBeInTheDocument();
-    expect(await screen.findAllByText('登录后评论')).toHaveLength(3);
+    expect(screen.queryByRole('heading', { name: '火影合集评论' })).not.toBeInTheDocument();
+    expect(await screen.findAllByText('登录后评论')).toHaveLength(2);
   });
 });
 

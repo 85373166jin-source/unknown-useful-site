@@ -61,7 +61,7 @@ CREATE INDEX idx_comments_visible_until ON comments(visible_until) WHERE status 
 - 游客看到“登录后评论”，点击返回当前产品页面登录。
 - 发布成功后：pending 显示“审核中”；SVIP public 显示“发布成功”；author_only 只在作者侧显示为正常评论，不显示特殊标签。
 - 评论项显示用户名、当前有效 VIP/SVIP 标识、剩余天数、合作管理员标识和时间。
-- 课程页为 `super`、`anbu`、`bundle` 提供评论区。
+- 课程页为 `super`、`anbu` 提供独立评论区；`bundle` 合集不提供独立评论。
 
 - `AdminComments` 支持按 pending/public/author_only 筛选，审核通过、拒绝、删除。
 - 评论管理导航仅对 owner 和 admin 显示；其他站长专属导航仍仅 owner 可见。

@@ -62,9 +62,13 @@ export function CoursePage() {
     };
   }, []);
 
-  function openUnlock(series: Series): void {
+  function toggleUnlock(series: Series): void {
     if (!getSessionToken()) {
       navigate(`/login?returnTo=${encodeURIComponent('/courses/fire-shadow')}`, { replace: true });
+      return;
+    }
+    if (activeSeries?.id === series.id) {
+      closeUnlock();
       return;
     }
     setActiveSeries(series);
@@ -130,13 +134,52 @@ export function CoursePage() {
               </p>
               {state.actions ? (
                 <div className="course-series__actions">
-                  <button type="button" onClick={() => openUnlock(series)}>
+                  <button
+                    type="button"
+                    aria-expanded={activeSeries?.id === series.id}
+                    aria-controls={`course-unlock-${series.id}`}
+                    onClick={() => toggleUnlock(series)}
+                  >
                     使用课程密码观看
                   </button>
                   <button type="button" onClick={() => navigate(`/payment-claim?productId=${series.id}`)}>
                     购买课程
                   </button>
                 </div>
+              ) : null}
+              {activeSeries?.id === series.id ? (
+                <form
+                  id={`course-unlock-${series.id}`}
+                  className="course-unlock"
+                  aria-label={`${series.title}课程密码`}
+                  onSubmit={submitUnlock}
+                >
+                  {error ? (
+                    <div className="alert alert--error" role="alert">
+                      {error}
+                    </div>
+                  ) : null}
+                  <div className="field">
+                    <label htmlFor={`course-password-${series.id}`}>课程密码</label>
+                    <input
+                      id={`course-password-${series.id}`}
+                      name="password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                  <div className="course-unlock__actions">
+                    <button type="button" onClick={closeUnlock} disabled={submitting}>
+                      取消
+                    </button>
+                    <button type="submit" className="button button--primary" disabled={submitting}>
+                      确认解锁
+                    </button>
+                  </div>
+                </form>
               ) : null}
               {unlocked.includes(series.id) && series.lessons.length > 0 ? (
                 <div className="course-series__lessons">
@@ -155,50 +198,7 @@ export function CoursePage() {
       <div className="course-comments">
         <ProductComments productId="super" title="超影课程评论" />
         <ProductComments productId="anbu" title="暗部课程评论" />
-        <ProductComments productId="bundle" title="火影合集评论" />
       </div>
-
-      {activeSeries ? (
-        <div
-          className="course-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`解锁${activeSeries.title}`}
-        >
-          <form className="card course-modal__card" onSubmit={submitUnlock}>
-            <h2>使用课程密码观看</h2>
-            <p>{activeSeries.title}</p>
-            {error ? (
-              <div className="alert alert--error" role="alert">
-                {error}
-              </div>
-            ) : null}
-            <div className="field">
-              <label htmlFor="course-password">课程密码</label>
-              <input
-                id="course-password"
-                name="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="off"
-                required
-              />
-            </div>
-            <div className="course-modal__actions">
-              <button type="button" onClick={closeUnlock} disabled={submitting}>
-                取消
-              </button>
-              <button type="submit" className="button button--primary" disabled={submitting}>
-                确认解锁
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
     </section>
   );
 }
-
-
-
