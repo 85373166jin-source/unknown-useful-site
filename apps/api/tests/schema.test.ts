@@ -72,6 +72,11 @@ describe('database schema', () => {
     );
   });
 
+  it('stores an optional avatar key on users', async () => {
+    const columns = await env.DB.prepare('PRAGMA table_info(users)').all<{ name: string }>();
+    expect(columns.results?.map((row) => row.name)).toContain('avatar_key');
+  });
+
   it('enforces one active entitlement per user and product', async () => {
     await env.DB.prepare("INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('u1', 'u1', 'hash', 'user', 'active', 1, 1)").run();
     await env.DB.prepare("INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, created_at, updated_at) VALUES ('super', '超影课程', 29, 'active', 'courses', 1, 1, 1)").run();

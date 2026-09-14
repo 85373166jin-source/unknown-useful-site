@@ -27,6 +27,7 @@ describe('deployment documentation', () => {
       '0008_subsites.sql',
       '0009_contributions_wallet.sql',
       '0010_settlement.sql',
+      '0011_user_avatar.sql',
       'wrangler rollback',
       'git revert'
     ];

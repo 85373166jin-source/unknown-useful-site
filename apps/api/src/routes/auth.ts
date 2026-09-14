@@ -5,11 +5,13 @@ import { bearerAuth } from '../middleware/auth';
 import { ApiError } from '../middleware/error';
 import {
   deleteContact,
+  getAvatar,
   getPublicUser,
   login,
   logout,
   recover,
   register,
+  uploadAvatar,
   updateAccount
 } from '../services/auth';
 
@@ -90,6 +92,13 @@ authRoutes.get('/me', bearerAuth, async (c) => {
   return c.json({ user: await getPublicUser(c.env, c.get('userId')) });
 });
 
+authRoutes.get('/users/:id/avatar', async (c) => {
+  const avatar = await getAvatar(c.env, c.req.param('id'));
+  c.header('Content-Type', avatar.contentType);
+  c.header('Cache-Control', 'public, max-age=3600');
+  return c.body(avatar.body);
+});
+
 authRoutes.post('/recover', async (c) => {
   const parsed = recoverSchema.safeParse(await readJson(c));
   if (!parsed.success) {
@@ -108,6 +117,24 @@ authRoutes.patch('/account', bearerAuth, async (c) => {
 
   const user = await updateAccount(c.env, c.get('userId'), parsed.data);
   return c.json({ user });
+});
+
+authRoutes.post('/account/avatar', bearerAuth, async (c) => {
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch {
+    throw new ApiError('invalid_request', 'Expected multipart form data', 400);
+  }
+  const value = form.get('avatar') as unknown;
+  const file =
+    value && typeof value === 'object' && 'arrayBuffer' in value && 'size' in value
+      ? (value as File)
+      : null;
+  if (!file) {
+    throw new ApiError('invalid_request', 'Avatar file is required', 400);
+  }
+  return c.json({ user: await uploadAvatar(c.env, c.get('userId'), file) });
 });
 
 authRoutes.delete('/account/contact', bearerAuth, async (c) => {

@@ -21,7 +21,8 @@ new frontend is published:
    `apps/api/migrations/0007_card_keys.sql` (card keys and unified card-key orders),
    `apps/api/migrations/0008_subsites.sql` (sub-sites),
    `apps/api/migrations/0009_contributions_wallet.sql` (contributions, earnings, withdrawals),
-   and `apps/api/migrations/0010_settlement.sql` (promo attribution and settlement details).
+   `apps/api/migrations/0010_settlement.sql` (promo attribution and settlement details),
+   and `apps/api/migrations/0011_user_avatar.sql` (optional profile avatars).
 3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
 4. Only then push the Pages build. Publishing Pages before the matching Worker
    makes the new comment UI call endpoints that do not exist yet.
@@ -144,8 +145,9 @@ serves the comment endpoints. `0006_display_name.sql` adds the unique public dis
 `0007_card_keys.sql` adds one-time card keys and card-key orders. `0008_subsites.sql`
 adds four sub-site tiers; `0009_contributions_wallet.sql` adds contributions,
 permissions, notifications, earnings, and withdrawals; `0010_settlement.sql` adds
-promo-code attribution and immutable settlement fields. Apply all pending
-migrations before deploying the matching frontend and Worker.
+promo-code attribution and immutable settlement fields. `0011_user_avatar.sql`
+adds the optional avatar KV key. Apply all pending migrations before deploying
+the matching frontend and Worker.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,

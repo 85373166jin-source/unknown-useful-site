@@ -294,3 +294,231 @@
     grid-template-columns: 1fr;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-page__title-actions,
+.account-avatar,
+.account-subsites__header,
+.notification-list-card__toolbar,
+.notification-item,
+.modal-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.account-page__title-actions {
+  flex-wrap: wrap;
+}
+
+.account-notification-button {
+  position: relative;
+  border: 1px solid var(--brand-blue);
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: var(--brand-blue);
+  font-weight: 700;
+  text-decoration: none;
+  background: rgba(47, 111, 237, 0.06);
+}
+
+.account-notification-button__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: var(--brand-red);
+  color: white;
+  font-size: 0.75rem;
+}
+
+.account-avatar {
+  margin-bottom: var(--space-4);
+}
+
+.account-avatar img,
+.account-avatar > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: linear-gradient(135deg, var(--brand-red), var(--brand-blue), var(--brand-purple));
+  color: white;
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.link-button {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand-blue);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.membership-products {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.membership-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.membership-card__price {
+  color: var(--brand-purple);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.account-subsites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.account-subsites__header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.account-subsites__current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: rgba(47, 111, 237, 0.08);
+  color: var(--brand-blue);
+}
+
+.subsite-card {
+  border: 1px solid var(--border);
+}
+
+.subsite-card--current {
+  border-color: var(--brand-blue);
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.12);
+}
+
+.subsite-card__share {
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+.notification-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.notification-categories .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notification-categories span {
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: rgba(15, 23, 42, 0.08);
+  font-size: 0.75rem;
+}
+
+.notification-list-card__toolbar {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.notification-item {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.notification-item--unread {
+  border-left: 3px solid var(--brand-blue);
+  padding-left: var(--space-3);
+}
+
+.notification-item time {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.modal-card {
+  width: min(680px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.modal-card__header {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.position-list {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.position-list li {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.position-list p {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 760px) {
+  .account-page__header,
+  .account-subsites__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .membership-products {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-item {
+    flex-direction: column;
+  }
+}

@@ -26,6 +26,7 @@ import { findUserById, type UserRow } from '../repositories/users';
 import { buildAuditStatement } from './audit';
 import { effectiveMembership, membershipRemainingDays } from './membership';
 import { consumeRateLimit } from './rate-limit';
+import { createNotification } from './notifications';
 
 export const SVIP_COMMENT_WINDOW_MS = 10 * 60 * 1000;
 export const AUTHOR_ONLY_VISIBLE_MS = 60 * 60 * 1000;
@@ -217,6 +218,16 @@ export async function reviewComment(
   if (!reviewed) {
     throw new Error('Failed to load the reviewed comment');
   }
+
+  await createNotification(env, {
+    userId: comment.user_id,
+    type: 'comment.reviewed',
+    title: decision === 'approve' ? '评论已通过审核' : '评论未通过审核',
+    body: decision === 'approve'
+      ? `你的评论「${comment.body.slice(0, 40)}」已经公开显示`
+      : `你的评论「${comment.body.slice(0, 40)}」未通过：${reason ?? '不符合要求'}`,
+    link: '/courses/fire-shadow'
+  });
 
   return toCommentPayload(reviewed, now);
 }

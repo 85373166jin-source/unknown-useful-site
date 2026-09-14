@@ -43,11 +43,19 @@ export const LOGIN_USERNAME_LIMIT = 5;
 export const LOGIN_IP_LIMIT = 20;
 export const RECOVERY_USERNAME_LIMIT = 5;
 export const RECOVERY_IP_LIMIT = 20;
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const AVATAR_TYPES: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif'
+};
 
 export interface PublicUser {
   id: string;
   username: string;
   displayName: string;
+  avatarUrl: string | null;
   role: UserRole;
   permissionRole: PermissionRole;
   membershipTier: MembershipTier;
@@ -104,6 +112,7 @@ function toPublicUser(user: UserRow, now: number = Date.now()): PublicUser {
     id: user.id,
     username: user.username,
     displayName: user.display_name ?? user.username,
+    avatarUrl: user.avatar_key ? `/api/v1/auth/users/${user.id}/avatar` : null,
     role: user.role === 'admin' ? 'admin' : 'user',
     permissionRole: effectivePermissionRole(user.permission_role),
     membershipTier: effective.tier,
@@ -468,6 +477,72 @@ export async function getPublicUser(env: Env, userId: string): Promise<PublicUse
     throw new ApiError('unauthorized', 'Account is not available', 401);
   }
   return toPublicUser(user, Date.now());
+}
+
+export async function uploadAvatar(env: Env, userId: string, file: File): Promise<PublicUser> {
+  const contentType = file.type.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const extension = AVATAR_TYPES[contentType];
+  if (!extension) {
+    throw new ApiError('unsupported_media_type', '头像仅支持 PNG、JPEG、WebP 或 GIF', 400);
+  }
+  if (file.size <= 0 || file.size > MAX_AVATAR_BYTES) {
+    throw new ApiError('file_too_large', '头像文件不能超过 2 MB', 400);
+  }
+
+  const user = await findUserById(env.DB, userId);
+  if (!user) {
+    throw new ApiError('unauthorized', 'Account is not available', 401);
+  }
+
+  const now = Date.now();
+  const key = `avatars/${userId}/${now}.${extension}`;
+  const oldKey = user.avatar_key;
+  await env.SCREENSHOTS.put(key, await file.arrayBuffer(), { metadata: { contentType } });
+  try {
+    await env.DB.prepare('UPDATE users SET avatar_key = ?, updated_at = ? WHERE id = ?')
+      .bind(key, now, userId)
+      .run();
+  } catch (error) {
+    await env.SCREENSHOTS.delete(key);
+    throw error;
+  }
+  if (oldKey && oldKey !== key) {
+    await env.SCREENSHOTS.delete(oldKey);
+  }
+
+  await recordAudit(env, {
+    actorUserId: userId,
+    action: 'auth.avatar.update',
+    entityType: 'user',
+    entityId: userId,
+    before: { avatarUrl: oldKey ? `/api/v1/auth/users/${userId}/avatar` : null },
+    after: { avatarUrl: `/api/v1/auth/users/${userId}/avatar` }
+  });
+
+  return getPublicUser(env, userId);
+}
+
+export async function getAvatar(
+  env: Env,
+  userId: string
+): Promise<{ contentType: string; body: ArrayBuffer }> {
+  const row = await env.DB.prepare('SELECT avatar_key FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ avatar_key: string | null }>();
+  if (!row?.avatar_key) {
+    throw new ApiError('avatar_not_found', 'Avatar not found', 404);
+  }
+  const object = await env.SCREENSHOTS.getWithMetadata<{ contentType?: string }>(
+    row.avatar_key,
+    'arrayBuffer'
+  );
+  if (!object.value) {
+    throw new ApiError('avatar_not_found', 'Avatar not found', 404);
+  }
+  return {
+    contentType: object.metadata?.contentType ?? 'application/octet-stream',
+    body: object.value
+  };
 }
 
 export async function updateAccount(

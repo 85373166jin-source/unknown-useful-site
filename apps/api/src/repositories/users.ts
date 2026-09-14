@@ -9,6 +9,7 @@ export interface UserRow {
   id: string;
   username: string;
   display_name: string | null;
+  avatar_key: string | null;
   password_hash: string;
   role: UserRole;
   permission_role: PermissionRole;
@@ -37,6 +38,7 @@ const USER_COLUMNS = [
   'id',
   'username',
   'display_name',
+  'avatar_key',
   'password_hash',
   'role',
   'permission_role',

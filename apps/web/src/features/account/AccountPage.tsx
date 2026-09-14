@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CATALOG, type MembershipTier, type PermissionRole, type ProductId } from '@site/contracts';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError, apiFetch, apiUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { SubsitePanel } from './SubsitePanel';
 
@@ -36,6 +36,24 @@ interface ContributionItem {
   created_at: number;
 }
 
+interface SubsiteState {
+  tier: 'free' | 'basic' | 'advanced' | 'top';
+}
+
+interface NotificationItem {
+  read_at: number | null;
+}
+
+const POSITION_OPTIONS = [
+  { name: '普通用户', description: '浏览内容、评论、购买课程、投稿和申请加入分站。' },
+  { name: '免费分站', description: '推广收益 1%，适合先体验推广和订单归属。' },
+  { name: '基础分站', description: '推广收益 50%，开通费 0.01 元。' },
+  { name: '高级分站', description: '推广收益 90%，开通费 9.9 元。' },
+  { name: '顶级分站', description: '推广收益 100%，开通费 10 元。' },
+  { name: '合作管理员', description: '参与评论审核和日常后台管理，由站长设置。' },
+  { name: '站长', description: '拥有后台全部管理、订单、收益和系统配置权限。' }
+] as const;
+
 const PRODUCT_NAMES: Partial<Record<ProductId, string>> = {
   vip_monthly: 'VIP 会员',
   svip_monthly: 'SVIP 豪华会员',
@@ -50,8 +68,9 @@ function productName(productId: ProductId): string {
 }
 
 export function AccountPage() {
-  const { user, logout, updateAccount, clearSession } = useAuth();
+  const { user, logout, updateAccount, clearSession, refresh } = useAuth();
   const navigate = useNavigate();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -63,6 +82,10 @@ export function AccountPage() {
   const [paidProductIds, setPaidProductIds] = useState<ProductId[]>([]);
   const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
   const [contributions, setContributions] = useState<ContributionItem[]>([]);
+  const [hasSubsite, setHasSubsite] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [showPositions, setShowPositions] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -70,13 +93,19 @@ export function AccountPage() {
     Promise.all([
       apiFetch<{ unlocked: ProductId[] }>('/entitlements'),
       apiFetch<{ orders: PaymentOrder[] }>('/orders/mine'),
-      apiFetch<{ contributions: ContributionItem[] }>('/contributions/mine')
+      apiFetch<{ contributions: ContributionItem[] }>('/contributions/mine'),
+      apiFetch<{ subsite: SubsiteState | null }>('/subsites/me'),
+      apiFetch<{ notifications: NotificationItem[] }>('/wallet/notifications')
     ])
-      .then(([entitlements, orders, submitted]) => {
+      .then(([entitlements, orders, submitted, subsitePayload, notificationPayload]) => {
         if (cancelled) return;
         setPaidProductIds(entitlements.unlocked ?? []);
         setPaymentOrders(orders.orders ?? []);
         setContributions(submitted.contributions ?? []);
+        setHasSubsite(Boolean(subsitePayload.subsite));
+        setUnreadNotifications(
+          (notificationPayload.notifications ?? []).filter((item) => item.read_at === null).length
+        );
       })
       .catch(() => {
         // Keep the account page usable when optional history fails to load.
@@ -171,10 +200,45 @@ export function AccountPage() {
     navigate('/login', { replace: true });
   }
 
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+      setError('头像仅支持 PNG、JPEG、WebP 或 GIF');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('头像文件不能超过 2 MB');
+      return;
+    }
+
+    setAvatarBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      form.set('avatar', file);
+      await apiFetch('/auth/account/avatar', { method: 'POST', body: form });
+      await refresh();
+      setNotice('头像已更新');
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : '头像更新失败');
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
   return (
     <section className="account-page">
       <div className="account-page__header">
-        <h1>用户中心</h1>
+        <div className="account-page__title-actions">
+          <h1>用户中心</h1>
+          <Link className="account-notification-button" to="/notifications" aria-label="查看通知">
+            通知
+            {unreadNotifications > 0 ? <span className="account-notification-button__badge">{unreadNotifications}</span> : null}
+          </Link>
+        </div>
         <button type="button" className="button" onClick={() => void handleLogout()}>
           退出登录
         </button>
@@ -193,6 +257,28 @@ export function AccountPage() {
 
       <div className="card">
         <h2>账号资料</h2>
+        <div className="account-avatar">
+          {user.avatarUrl ? (
+            <img src={apiUrl(user.avatarUrl)} alt={`${user.displayName} 的头像`} />
+          ) : (
+            <span aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
+          )}
+          <button
+            type="button"
+            className="button"
+            disabled={avatarBusy}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            {avatarBusy ? '上传中…' : '更换头像'}
+          </button>
+          <input
+            ref={avatarInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(event) => void handleAvatarChange(event)}
+          />
+        </div>
         <dl className="account-facts">
           <div>
             <dt>账号</dt>
@@ -221,6 +307,9 @@ export function AccountPage() {
         <section className="card account-identity-block">
           <h2>身份角色</h2>
           <p className="account-identity-block__value">{PERMISSION_ROLE_LABELS[permissionRole]}</p>
+          <button type="button" className="link-button" onClick={() => setShowPositions(true)}>
+            点击查看所有职位
+          </button>
         </section>
 
         <section className="card account-identity-block">
@@ -247,12 +336,11 @@ export function AccountPage() {
             </>
           )}
         </section>
-
-        <SubsitePanel />
-        <section className="card account-identity-block"><h2>站内通知</h2><p>查看收益、投稿审核和提现状态通知。</p><Link className="button" to="/notifications">查看通知</Link></section>
         <section className="card account-identity-block"><h2>我的余额</h2><p>查看分站收益、投稿收益和提现记录。</p><Link className="button" to="/wallet">进入我的余额</Link></section>
-        <section className="card account-identity-block"><h2>合作投稿</h2><p>上传图片、视频或 ZIP 投稿，审核通过后可进入素材库。</p><Link className="button" to="/contribute">进入合作投稿</Link></section>
+        <section className="card account-identity-block"><h2>合作投稿</h2><p>自由选择分成收益；图片或视频通过后解锁 ZIP 投稿。</p><Link className="button" to="/contribute">进入合作投稿</Link></section>
       </div>
+
+      <SubsitePanel />
 
       {permissionRole === 'owner' ? (
         <div className="card account-admin-entry">
@@ -358,7 +446,7 @@ export function AccountPage() {
         )}
       </div>
 
-      <div className="card">
+      {(hasSubsite || contributions.length > 0) ? <div className="card">
         <h2>待审核项目</h2>
         {pendingOrders.length === 0 && pendingContributions.length === 0 ? (
           <p className="empty-state">暂无待审核项目</p>
@@ -389,7 +477,32 @@ export function AccountPage() {
             )}
           </>
         )}
-      </div>
+      </div> : null}
+
+      {showPositions ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShowPositions(false)}>
+          <section
+            className="card modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="positions-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-card__header">
+              <h2 id="positions-title">所有职位</h2>
+              <button type="button" className="button" onClick={() => setShowPositions(false)}>关闭</button>
+            </div>
+            <ul className="position-list">
+              {POSITION_OPTIONS.map((position) => (
+                <li key={position.name}>
+                  <strong>{position.name}</strong>
+                  <p>{position.description}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

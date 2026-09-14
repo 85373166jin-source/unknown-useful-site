@@ -44,7 +44,7 @@ describe('AccountPage', () => {
     expect(screen.getByRole('link', { name: '进入站长后台' }).getAttribute('href')).toContain('admin/#/dashboard');
   });
 
-  it('shows an omitted partner level as not opened without inventing an API value', () => {
+  it('shows account actions, role details, and all sub-site prices on one page', () => {
     render(
       <TestProviders initialUser={user} initialEntries={['/account']}>
         <Routes><Route path="/account" element={<AccountPage />} /></Routes>
@@ -54,13 +54,27 @@ describe('AccountPage', () => {
     expect(screen.getByText('账号')).toBeInTheDocument();
     expect(screen.getAllByText('展示用户名').length).toBeGreaterThan(0);
     expect(screen.getByText('已付费项目')).toBeInTheDocument();
-    expect(screen.getByText('待审核项目')).toBeInTheDocument();
+    expect(screen.queryByText('待审核项目')).not.toBeInTheDocument();
     expect(screen.getByText('身份角色')).toBeInTheDocument();
+    expect(screen.getByText('用户')).toBeInTheDocument();
     expect(screen.getByText('会员等级')).toBeInTheDocument();
     expect(screen.getByText('加入分站')).toBeInTheDocument();
     expect(screen.getByText('会员剩余 23 天')).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
-    expect(screen.getByText('未加入')).toBeInTheDocument();
+    expect(screen.getByText(/未加入/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看通知' })).toHaveAttribute('href', '/notifications');
+    expect(screen.getByText('免费分站')).toBeInTheDocument();
+    expect(screen.getByText('基础分站')).toBeInTheDocument();
+    expect(screen.getByText('高级分站')).toBeInTheDocument();
+    expect(screen.getByText('顶级分站')).toBeInTheDocument();
+    expect(screen.getByText('0.01 元')).toBeInTheDocument();
+    expect(screen.getByText('9.9 元')).toBeInTheDocument();
+    expect(screen.getByText('10 元')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '点击查看所有职位' }));
+    expect(screen.getByRole('dialog', { name: '所有职位' })).toBeInTheDocument();
+    expect(screen.getByText('合作管理员')).toBeInTheDocument();
+    expect(screen.getByText('站长')).toBeInTheDocument();
   });
 
   it('clears the revoked session and shows a notice after password change', async () => {

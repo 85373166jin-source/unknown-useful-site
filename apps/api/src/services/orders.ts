@@ -19,6 +19,7 @@ import {
   type ProductRow
 } from '../repositories/orders';
 import { recordAudit } from './audit';
+import { createNotification } from './notifications';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
 import { buildUpsertSubsiteStatement, type SubsiteTier } from './subsites';
 import { priceProductForUser } from './pricing';
@@ -552,6 +553,13 @@ async function approvePaymentClaim(
     after: afterAudit
   });
   await notifyEarningSettlement(env, order.id, 'approved');
+  await createNotification(env, {
+    userId: claim.user_id,
+    type: 'order.approved',
+    title: '购买课程已开通',
+    body: `订单 ${claim.order_no} 已审核通过，对应课程或权益已绑定到当前账号`,
+    link: '/account'
+  });
 
   return updated;
 }
@@ -599,6 +607,13 @@ async function rejectPaymentClaim(
     after: toPaymentClaimAudit(updated)
   });
   await notifyEarningSettlement(env, order.id, 'rejected');
+  await createNotification(env, {
+    userId: claim.user_id,
+    type: 'order.rejected',
+    title: '购买申请未通过',
+    body: `订单 ${claim.order_no} 未通过：${rejectionReason}`,
+    link: '/account'
+  });
 
   return updated;
 }

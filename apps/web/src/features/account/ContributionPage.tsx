@@ -98,7 +98,7 @@ export function ContributionPage() {
     <section className="course-page">
       <header className="course-page__header">
         <h1>合作投稿</h1>
-        <p>图片、视频和每份 ZIP 都要分别审核；任意图片或视频通过后，才会永久解锁 ZIP 投稿。</p>
+        <p>自由选择分成收益；图片、视频和每份 ZIP 都要分别审核，任意图片或视频通过后才会永久解锁 ZIP 投稿。</p>
       </header>
 
       {notice ? <div className="alert alert--success" role="status">{notice}</div> : null}
