@@ -20,6 +20,7 @@ import {
 } from '../repositories/orders';
 import { recordAudit } from './audit';
 import { applyMembershipPurchase, effectiveMembership } from './membership';
+import { buildUpsertSubsiteStatement, type SubsiteTier } from './subsites';
 import { priceProductForUser } from './pricing';
 
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
@@ -414,6 +415,10 @@ async function approvePaymentClaim(
     };
   }
 
+  const subsiteTierMap: Record<string, SubsiteTier> = { partner_basic: 'basic', partner_advanced: 'advanced', partner_top: 'top' };
+  const subsiteTier = subsiteTierMap[claim.product_id];
+  const subsiteStatement = subsiteTier ? buildUpsertSubsiteStatement(env.DB, claim.user_id, subsiteTier, now) : null;
+
   const reviewStatement = buildUpdatePaymentClaimReviewStatement(env.DB, claim.order_no, {
     status: 'approved',
     actualAmountYuan,
@@ -426,9 +431,11 @@ async function approvePaymentClaim(
     expectedStatus: 'pending',
     expectedMembership
   });
-  const statements = membershipStatement
-    ? [membershipStatement, reviewStatement]
-    : [reviewStatement];
+  const statements = [
+    ...(membershipStatement ? [membershipStatement] : []),
+    ...(subsiteStatement ? [subsiteStatement] : []),
+    reviewStatement
+  ];
   const results = await env.DB.batch(statements);
   const reviewResult = results[results.length - 1];
   if ((reviewResult?.meta?.changes ?? 0) !== 1) {
