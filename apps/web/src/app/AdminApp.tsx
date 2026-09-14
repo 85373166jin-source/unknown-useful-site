@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context';
 import { AdminAudit } from '../features/admin/AdminAudit';
@@ -61,10 +62,33 @@ function AdminLayout({ isOwner }: { isOwner: boolean }) {
 }
 
 function AdminForbidden() {
+  const { logout } = useAuth();
+  const [switching, setSwitching] = useState(false);
+
+  async function switchAccount(): Promise<void> {
+    setSwitching(true);
+    try {
+      await logout();
+    } catch {
+      // logout clears the local session even if the server request fails
+    } finally {
+      window.location.assign(`${import.meta.env.BASE_URL}#/login`);
+    }
+  }
+
   return (
     <section className="admin-forbidden">
       <h1>无权访问</h1>
       <p>仅站长和合作管理员可访问后台。</p>
+      <p>当前登录的是普通账号，切换到站长账号后才能进入后台。</p>
+      <button
+        type="button"
+        className="button button--primary"
+        disabled={switching}
+        onClick={() => void switchAccount()}
+      >
+        {switching ? '正在退出…' : '切换账号'}
+      </button>
     </section>
   );
 }

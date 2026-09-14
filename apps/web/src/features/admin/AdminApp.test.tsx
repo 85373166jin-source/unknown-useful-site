@@ -103,6 +103,7 @@ describe('AdminApp', () => {
     );
 
     expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '切换账号' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '评论审核' })).not.toBeInTheDocument();
   });
 });
