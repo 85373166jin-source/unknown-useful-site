@@ -12,6 +12,7 @@ import { ordersRoutes } from './routes/orders';
 import { progressRoutes } from './routes/progress';
 import { commentsRoutes } from './routes/comments';
 import { adminCardKeyRoutes, cardKeyRoutes } from './routes/card-keys';
+import { subsitesRoutes } from './routes/subsites';
 import { cleanupExpiredData } from './services/comments';
 
 for (const product of Object.values(CATALOG.products)) {
@@ -63,6 +64,7 @@ app.route('/api/v1/entitlements', entitlementsRoutes);
 app.route('/api/v1/orders', ordersRoutes);
 app.route('/api/v1/card-keys', cardKeyRoutes);
 app.route('/api/v1/admin/card-keys', adminCardKeyRoutes);
+app.route('/api/v1/subsites', subsitesRoutes);
 app.route('/api/v1/progress', progressRoutes);
 app.route('/api/v1', commentsRoutes);
 app.route('/api/v1/admin', adminRoutes);
