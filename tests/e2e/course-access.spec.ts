@@ -3,22 +3,28 @@ import {
   ADMIN_PASSWORD,
   ADMIN_USERNAME,
   ONE_PIXEL_PNG,
-  SUPER_COURSE_PASSWORD,
   loginUser,
   registerUser,
   setSession,
   uniqueUsername
 } from './helpers';
 
-test('a course password unlocks the super series', async ({ page, request }) => {
+test('a one-time card key unlocks the super series', async ({ page, request }) => {
   const { token } = await registerUser(request, uniqueUsername('e2e-course'));
+  const admin = await loginUser(request, ADMIN_USERNAME, ADMIN_PASSWORD);
+  const generated = await request.post('http://127.0.0.1:8787/api/v1/admin/card-keys/batches', {
+    headers: { Authorization: `Bearer ${admin.token}` },
+    data: { productId: 'super', quantity: 1, note: 'e2e' }
+  });
+  expect(generated.status()).toBe(201);
+  const cardKey = ((await generated.json()) as { codes: string[] }).codes[0];
   await setSession(page, token);
 
   await page.goto('/#/courses/fire-shadow');
   const superCard = page.locator('.course-series', { hasText: '超影课程' });
-  await superCard.getByRole('button', { name: '使用课程密码观看' }).click();
+  await superCard.getByRole('button', { name: '使用卡密观看' }).click();
 
-  await page.getByLabel('课程密码').fill(SUPER_COURSE_PASSWORD);
+  await page.getByLabel('卡密').fill(cardKey);
   await page.getByRole('button', { name: '确认解锁' }).click();
 
   await expect(page.getByRole('status')).toContainText('超影课程 已解锁');
