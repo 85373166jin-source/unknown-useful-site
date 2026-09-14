@@ -1,5 +1,6 @@
 import type { Env } from '../env';
 import { ApiError } from '../middleware/error';
+import { createNotification } from './notifications';
 
 export type ContributionKind = 'image' | 'video' | 'zip';
 export interface ContributionInput { title: string; kind: ContributionKind; externalUrl: string; extractionCode?: string | undefined; requestedSharePercent: number; note?: string | undefined; }
@@ -33,6 +34,16 @@ export async function reviewContribution(env: Env, reviewerId: string, id: strin
   await env.DB.prepare('UPDATE contributions SET status = ?, approved_share_bps = ?, rejection_reason = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?').bind(status, share, reason, reviewerId, now, now, id).run();
   if (decision === 'approve' && (row.kind === 'image' || row.kind === 'video')) {
     await env.DB.prepare('INSERT INTO contribution_permissions (user_id, zip_unlocked_at) SELECT user_id, ? FROM contributions WHERE id = ? ON CONFLICT(user_id) DO NOTHING').bind(now, id).run();
+  }
+  const contribution = await env.DB.prepare('SELECT user_id, title FROM contributions WHERE id = ?').bind(id).first<{ user_id: string; title: string }>();
+  if (contribution) {
+    await createNotification(env, {
+      userId: contribution.user_id,
+      type: 'contribution.reviewed',
+      title: decision === 'approve' ? '合作投稿已通过' : '合作投稿未通过',
+      body: decision === 'approve' ? `《${contribution.title}》已通过审核` : `《${contribution.title}》未通过：${reason}`,
+      link: '/account'
+    });
   }
   return env.DB.prepare('SELECT * FROM contributions WHERE id = ?').bind(id).first();
 }
