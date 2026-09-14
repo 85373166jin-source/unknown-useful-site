@@ -1,6 +1,11 @@
 import type { D1Database } from '@cloudflare/workers-types';
 
 export const TABLES_TO_CLEAR = [
+  'withdrawals',
+  'earning_entries',
+  'notifications',
+  'contributions',
+  'contribution_permissions',
   'subsites',
   'orders',
   'card_keys',
