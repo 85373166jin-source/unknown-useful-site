@@ -38,6 +38,22 @@ describe('database schema', () => {
     expect(index?.name).toBe('idx_users_display_name_nocase');
   });
 
+  it('adds card key and order tables', async () => {
+    const tables = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('card_key_batches', 'card_keys', 'orders') ORDER BY name"
+    ).all<{ name: string }>();
+    expect(tables.results?.map((row) => row.name)).toEqual(['card_key_batches', 'card_keys', 'orders']);
+
+    const indexes = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_card_keys_hash', 'idx_card_keys_product_status', 'idx_orders_user_created') ORDER BY name"
+    ).all<{ name: string }>();
+    expect(indexes.results?.map((row) => row.name)).toEqual([
+      'idx_card_keys_hash',
+      'idx_card_keys_product_status',
+      'idx_orders_user_created'
+    ]);
+  });
+
   it('enforces one active entitlement per user and product', async () => {
     await env.DB.prepare("INSERT INTO users (id, username, password_hash, role, status, created_at, updated_at) VALUES ('u1', 'u1', 'hash', 'user', 'active', 1, 1)").run();
     await env.DB.prepare("INSERT INTO products (id, title, price_yuan, status, category_id, sort_order, created_at, updated_at) VALUES ('super', '超影课程', 29, 'active', 'courses', 1, 1, 1)").run();
