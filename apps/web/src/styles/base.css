@@ -251,6 +251,12 @@ button:disabled {
   color: var(--color-text-muted);
 }
 
+.card-key-code-list {
+  display: grid;
+  gap: var(--space-2);
+  font-family: var(--font-mono, monospace);
+}
+
 .course-series__actions,
 .course-unlock__actions {
   display: flex;

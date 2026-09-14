@@ -124,6 +124,12 @@ invocations in the Cloudflare dashboard.
 2–20 个字符且全站唯一，现有用户默认沿用原登录账号。用户可在用户中心单独修改展示用户名，
 修改展示名不会改变登录账号、会话或已有订单。
 
+## 一次性卡密
+
+卡密由 `/admin/#/card-keys` 按商品生成，生成后 30 天有效且只能使用一次。
+系统只保存卡密哈希；兑换成功后生成 `ORD-` 订单号并授予对应权益。后台可重新输入卡密核验
+状态、使用者和订单号。
+
 ## 修改站长和课程凭据
 
 Open `/admin/#/settings` to change any of the following without editing the database:

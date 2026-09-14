@@ -17,7 +17,8 @@ new frontend is published:
 2. Apply the pending remote migrations, including
    `apps/api/migrations/0004_comments.sql` (comments),
    `apps/api/migrations/0005_free_product.sql` (the `free` product), and
-   `apps/api/migrations/0006_display_name.sql` (public display names).
+   `apps/api/migrations/0006_display_name.sql` (public display names), and
+   `apps/api/migrations/0007_card_keys.sql` (card keys and unified card-key orders).
 3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
 4. Only then push the Pages build. Publishing Pages before the matching Worker
    makes the new comment UI call endpoints that do not exist yet.
@@ -136,8 +137,9 @@ The comments phase adds two more migrations. Apply
 its product/status/created and `author_only` visibility indexes, and
 `apps/api/migrations/0005_free_product.sql`, which inserts a legacy DB-only `free` placeholder
 that no longer has a user-facing comment surface. Apply them before deploying the Worker that
-serves the comment endpoints. `0006_display_name.sql` also adds the unique public
-display-name column, so apply it before deploying this frontend and Worker.
+serves the comment endpoints. `0006_display_name.sql` adds the unique public display-name column, and
+`0007_card_keys.sql` adds one-time card keys and card-key orders. Apply them before
+deploying the matching frontend and Worker.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
