@@ -57,10 +57,10 @@ describe('AccountPage', () => {
     expect(screen.getByText('待审核项目')).toBeInTheDocument();
     expect(screen.getByText('身份角色')).toBeInTheDocument();
     expect(screen.getByText('会员等级')).toBeInTheDocument();
-    expect(screen.getByText('合作等级')).toBeInTheDocument();
+    expect(screen.getByText('加入分站')).toBeInTheDocument();
     expect(screen.getByText('会员剩余 23 天')).toBeInTheDocument();
     expect(screen.getByText('VIP')).toBeInTheDocument();
-    expect(screen.getByText('未开通')).toBeInTheDocument();
+    expect(screen.getByText('未加入')).toBeInTheDocument();
   });
 
   it('clears the revoked session and shows a notice after password change', async () => {

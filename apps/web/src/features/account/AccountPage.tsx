@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { MembershipTier, PartnerLevel, PermissionRole } from '@site/contracts';
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { SubsitePanel } from './SubsitePanel';
 
 function formatCreatedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-CN');
@@ -203,10 +204,7 @@ export function AccountPage() {
           )}
         </section>
 
-        <section className="card account-identity-block">
-          <h2>合作等级</h2>
-          <p className="account-identity-block__value">{PARTNER_LEVEL_LABELS[partnerLevel]}</p>
-        </section>
+        <SubsitePanel />
       </div>
 
       {permissionRole === 'owner' ? (
