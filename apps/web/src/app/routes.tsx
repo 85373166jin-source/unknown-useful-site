@@ -8,6 +8,7 @@ import { CoursePage } from '../features/courses/CoursePage';
 import { LessonPage } from '../features/courses/LessonPage';
 import { StaticContentPage } from '../features/content/StaticContentPage';
 import { MembershipPage } from '../features/membership/MembershipPage';
+import { ContributionPage } from '../features/account/ContributionPage';
 import { AuthProvider } from '../lib/auth-context';
 import { PublicApp } from './PublicApp';
 
@@ -40,6 +41,7 @@ export function PublicRoutes() {
             <Route path="/about" element={<StaticContentPage pageKey="about" />} />
             <Route path="/contact" element={<StaticContentPage pageKey="contact" />} />
             <Route path="/courses/fire-shadow" element={<CoursePage />} />
+            <Route path="/contribute" element={<ContributionPage />} />
             <Route
               path="/learn/:seriesId/:lessonId"
               element={

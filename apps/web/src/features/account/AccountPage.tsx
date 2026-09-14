@@ -205,6 +205,7 @@ export function AccountPage() {
         </section>
 
         <SubsitePanel />
+        <section className="card account-identity-block"><h2>合作投稿</h2><p>上传图片、视频或 ZIP 投稿，审核通过后可进入素材库。</p><Link className="button" to="/contribute">进入合作投稿</Link></section>
       </div>
 
       {permissionRole === 'owner' ? (
