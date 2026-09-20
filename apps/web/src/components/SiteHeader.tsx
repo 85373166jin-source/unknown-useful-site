@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth-context';
 const NAV_ITEMS = [
   { to: '/', label: '首页' },
   { to: '/resources', label: '全部资源' },
-  { to: '/courses', label: '课程' },
+  { to: '/courses/fire-shadow', label: '课程' },
   { to: '/tools', label: '工具服务' },
   { to: '/about', label: '关于' }
 ];

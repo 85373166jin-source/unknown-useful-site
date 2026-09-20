@@ -46,14 +46,7 @@ export function PublicRoutes() {
             <Route path="/contribute" element={<ContributionPage />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
-            <Route
-              path="/learn/:seriesId/:lessonId"
-              element={
-                <ProtectedRoute>
-                  <LessonPage />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/learn/:seriesId/:lessonId" element={<LessonPage />} />
             <Route
               path="/payment-claim"
               element={

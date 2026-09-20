@@ -29,6 +29,8 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: '某不知名有用的网站' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('搜索课程、工具或资源')).toBeInTheDocument();
     expect(screen.getByText('火影课程')).toBeInTheDocument();
+    expect(screen.getByText('课程限时免费')).toBeInTheDocument();
+    expect(screen.getByText('超影 18 节、暗部 31 节，无需登录即可播放和下载')).toBeInTheDocument();
     expect(screen.getByText('免费资源专区')).toBeInTheDocument();
     expect(screen.queryByText('免费资源专区评论')).not.toBeInTheDocument();
   });

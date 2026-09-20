@@ -32,6 +32,16 @@ describe('SiteHeader', () => {
     });
   });
 
+  it('links the header course item to the public course page', () => {
+    render(
+      <TestProviders initialUser={user}>
+        <SiteHeader />
+      </TestProviders>
+    );
+
+    expect(screen.getByRole('link', { name: '课程' })).toHaveAttribute('href', '/courses/fire-shadow');
+  });
+
   it('places contributions and notifications beside the signed-in user links', async () => {
     render(
       <TestProviders initialUser={user}>
