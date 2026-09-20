@@ -49,13 +49,12 @@ export function StandaloneCourseSite({ seriesId }: StandaloneCourseSiteProps) {
           key={selectedLesson.id}
           className="standalone-course__video"
           controls
-          preload="metadata"
+          preload="none"
           src={selectedLesson.mediaPath}
           poster={coverUrl}
           aria-label="课程视频"
         />
         <div className="standalone-course__player-footer">
-          <strong>{selectedLesson.title}</strong>
           <a href={selectedLesson.mediaPath} download={selectedLesson.title}>
             下载本节课视频
           </a>
