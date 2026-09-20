@@ -49,7 +49,7 @@ function renderPage(seriesId) {
     renderLessonButton(seriesId, index + 1)
   ).join('\n');
   const firstLessonId = `${seriesId}-01`;
-  const firstCover = `../media/covers/${firstLessonId}.jpg`;
+  const firstCover = `../media/covers/${firstLessonId}.webp`;
 
   return `<!doctype html>
 <html lang="zh-CN">

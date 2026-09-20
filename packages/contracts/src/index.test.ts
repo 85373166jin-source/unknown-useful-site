@@ -15,7 +15,7 @@ describe('catalog contracts', () => {
     expect(CATALOG.series.super.lessons[0]).toMatchObject({
       id: 'super-01',
       title: '第 1 课',
-      coverPath: '/media/covers/super-01.jpg'
+      coverPath: '/media/covers/super-01.webp'
     });
     expect(CATALOG.series.super.lessons[0]?.mediaPath).toContain('/super-01.mp4');
     expect(CATALOG.series.anbu.lessons[30]?.mediaPath).toContain('/anbu-31.mp4');
