@@ -20,7 +20,8 @@ describe('CoursePage', () => {
   it('renders cover cards for every lesson', () => {
     render(<CoursePage />, { wrapper: TestProviders });
 
-    const firstLesson = screen.getByRole('link', { name: '播放 第 1 课' });
+    const superCourse = screen.getByText('超影课程').closest('article')!;
+    const firstLesson = within(superCourse).getByRole('link', { name: '播放 第 1 课' });
     expect(firstLesson).toHaveAttribute('href', '/learn/super/super-01');
     expect(within(firstLesson).getByRole('img', { name: '第 1 课封面' })).toHaveAttribute(
       'src',
