@@ -1,0 +1,131 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const outputRoot = resolve(scriptDir, '..', 'public');
+const releaseBase =
+  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920';
+
+const SERIES = {
+  super: {
+    title: '超影课程',
+    count: 18,
+    archive: `${releaseBase}/super-course-18.zip`
+  },
+  anbu: {
+    title: '暗部课程',
+    count: 31,
+    archive: `${releaseBase}/anbu-course-31.zip`
+  }
+};
+
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function renderLessonButton(seriesId, lessonNumber) {
+  const lessonId = `${seriesId}-${String(lessonNumber).padStart(2, '0')}`;
+  const title = `第 ${lessonNumber} 课`;
+  const videoUrl = `${releaseBase}/${lessonId}.mp4`;
+  const coverUrl = `../media/covers/${lessonId}.jpg`;
+  return `<button class="lesson" type="button" aria-label="播放 ${escapeHtml(title)}" data-lesson="${escapeHtml(title)}" data-video="${videoUrl}" data-cover="${coverUrl}" data-download="${videoUrl}">
+  <span class="lesson-cover"><img src="${coverUrl}" alt="${escapeHtml(title)}封面" loading="lazy"><span aria-hidden="true">▶</span></span>
+  <strong>${escapeHtml(title)}</strong>
+</button>`;
+}
+
+function renderPage(seriesId) {
+  const series = SERIES[seriesId];
+  if (!series) {
+    throw new Error(`Unknown series: ${seriesId}`);
+  }
+
+  const lessons = Array.from({ length: series.count }, (_, index) =>
+    renderLessonButton(seriesId, index + 1)
+  ).join('\n');
+  const firstLessonId = `${seriesId}-01`;
+  const firstCover = `../media/covers/${firstLessonId}.jpg`;
+
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>${series.title}</title>
+  <style>
+    :root{color-scheme:light;--blue:#2f6fed;--text:#172033;--muted:#657089;--border:#dbe3f0;--surface:#fff;--bg:#f4f7fb;--shadow:0 10px 30px rgba(23,32,51,.08)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.55}
+    a{color:var(--blue);text-decoration:none}.site{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:32px 0 56px}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px}.eyebrow{margin:0 0 4px;color:var(--blue);font-size:.85rem;font-weight:800;letter-spacing:.12em}.header h1{margin:0;font-size:clamp(1.7rem,4vw,2.5rem)}.intro{margin:8px 0 0;color:var(--muted)}
+    .button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--blue);border-radius:10px;padding:10px 18px;background:var(--blue);color:#fff;font-weight:700;text-decoration:none}.button:hover{filter:brightness(.94)}
+    .player{overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#000;box-shadow:var(--shadow)}video{display:block;width:100%;max-height:72vh;aspect-ratio:16/9;background:#000}.player-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;background:var(--surface)}.player-hint{color:var(--muted)}
+    .catalog{margin-top:32px}.catalog h2{margin:0 0 16px;font-size:1.25rem}.lesson-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}.lesson{display:flex;flex-direction:column;gap:8px;border:0;padding:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;font:inherit}.lesson-cover{position:relative;display:block;overflow:hidden;border:2px solid transparent;border-radius:14px;background:#000;aspect-ratio:16/9}.lesson-cover img{width:100%;height:100%;object-fit:cover;transition:transform .18s ease}.lesson:hover img{transform:scale(1.03)}.lesson-cover>span{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:2rem;text-shadow:0 2px 12px rgba(0,0,0,.75)}.lesson.active .lesson-cover{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,111,237,.15)}
+    @media(max-width:900px){.lesson-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:640px){.header,.player-footer{align-items:flex-start;flex-direction:column}.lesson-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="site">
+    <header class="header">
+      <div>
+        <p class="eyebrow">专属课程入口</p>
+        <h1>${series.title}</h1>
+        <p class="intro">共 ${series.count} 节，无需登录，点击目录即可播放和下载。</p>
+      </div>
+      <a class="button" href="${series.archive}" download>下载全部课程</a>
+    </header>
+
+    <section class="player" aria-label="课程播放器">
+      <video id="player" controls preload="none" poster="${firstCover}" aria-label="课程视频"></video>
+      <div class="player-footer">
+        <span class="player-hint" id="player-hint">请先选择一节课</span>
+        <a id="lesson-download" href="${releaseBase}/${firstLessonId}.mp4" download>下载本节课视频</a>
+      </div>
+    </section>
+
+    <section class="catalog" aria-label="课程目录">
+      <h2>课程目录</h2>
+      <div class="lesson-grid">
+${lessons}
+      </div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const player = document.getElementById('player');
+      const hint = document.getElementById('player-hint');
+      const lessonDownload = document.getElementById('lesson-download');
+      const buttons = Array.from(document.querySelectorAll('.lesson'));
+
+      for (const button of buttons) {
+        button.addEventListener('click', async () => {
+          for (const item of buttons) item.classList.remove('active');
+          button.classList.add('active');
+          player.poster = button.dataset.cover;
+          player.src = button.dataset.video;
+          player.load();
+          hint.textContent = button.dataset.lesson;
+          lessonDownload.href = button.dataset.download;
+          lessonDownload.download = button.dataset.lesson;
+          player.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          try { await player.play(); } catch {}
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
+`;
+}
+
+for (const seriesId of Object.keys(SERIES)) {
+  const directory = resolve(outputRoot, seriesId);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(resolve(directory, 'index.html'), renderPage(seriesId), 'utf8');
+}
