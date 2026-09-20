@@ -29,7 +29,7 @@ test('a one-time card key unlocks the super series', async ({ page, request }) =
 
   await expect(page.getByRole('status')).toContainText('超影课程 已解锁');
   await expect(superCard.locator('.course-series__badge')).toHaveText('已拥有');
-  await expect(superCard.getByRole('link', { name: '第 1 课' })).toBeVisible();
+  await expect(superCard.getByRole('link', { name: '播放 第 1 课' })).toBeVisible();
 
   const entitlements = await request.get('http://127.0.0.1:8787/api/v1/entitlements', {
     headers: { Authorization: `Bearer ${token}` }

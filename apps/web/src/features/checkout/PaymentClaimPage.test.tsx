@@ -11,6 +11,7 @@ afterEach(() => {
 const QUOTES: Record<string, { listAmountCents: number; actualAmountCents: number }> = {
   bundle: { listAmountCents: 4900, actualAmountCents: 4900 },
   super: { listAmountCents: 2900, actualAmountCents: 2320 },
+  anbu: { listAmountCents: 2900, actualAmountCents: 2900 },
   vip_monthly: { listAmountCents: 990, actualAmountCents: 990 },
   svip_monthly: { listAmountCents: 1990, actualAmountCents: 1990 }
 };
@@ -94,7 +95,7 @@ describe('PaymentClaimPage', () => {
     expect(paymentQrFallback('payment-alipay.jpg', '/unknown-useful-site/')).toBe('/unknown-useful-site/payment-alipay.jpg');
   });
 
-  it('omits coming-soon products and falls back to a claimable product', async () => {
+  it('offers the newly available anbu course for payment', async () => {
     installFetch();
     render(
       <TestProviders initialEntries={['/payment-claim?productId=anbu']}>
@@ -102,9 +103,9 @@ describe('PaymentClaimPage', () => {
       </TestProviders>
     );
 
-    expect(screen.getByLabelText('产品')).toHaveValue('bundle');
-    expect(screen.queryByRole('option', { name: /暗部课程/ })).not.toBeInTheDocument();
-    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：49.00 元')).toBeInTheDocument();
+    expect(screen.getByLabelText('产品')).toHaveValue('anbu');
+    expect(screen.getByRole('option', { name: /暗部课程/ })).toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
   });
 
   it('shows the exact server quote before the user pays', async () => {

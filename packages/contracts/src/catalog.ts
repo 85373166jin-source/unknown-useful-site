@@ -11,16 +11,25 @@ export type Catalog = {
   categories: readonly Category[];
 };
 
-const superLessons: Lesson[] = Array.from({ length: 9 }, (_, index) => {
-  const order = index + 1;
-  const padded = String(order).padStart(2, '0');
-  return {
-    id: `super-${padded}`,
-    title: `第 ${order} 课`,
-    mediaPath: `/media/super-shadow/${order}.mp4`,
-    order
-  };
-});
+export const COURSE_RELEASE_BASE =
+  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920';
+
+function buildLessons(seriesId: 'super' | 'anbu', count: number): Lesson[] {
+  return Array.from({ length: count }, (_, index) => {
+    const order = index + 1;
+    const padded = String(order).padStart(2, '0');
+    return {
+      id: `${seriesId}-${padded}`,
+      title: `第 ${order} 课`,
+      mediaPath: `${COURSE_RELEASE_BASE}/${seriesId}-${padded}.mp4`,
+      coverPath: `/media/covers/${seriesId}-${padded}.jpg`,
+      order
+    };
+  });
+}
+
+const superLessons = buildLessons('super', 18);
+const anbuLessons = buildLessons('anbu', 31);
 
 export const CATALOG = {
   products: {
@@ -31,16 +40,16 @@ export const CATALOG = {
       productType: 'course',
       status: 'active',
       categoryId: 'courses',
-      description: '9 个视频、在线播放、下载、进度同步'
+      description: '18 个视频、封面选集、在线播放、单课评论与下载'
     },
     anbu: {
       id: 'anbu',
       title: '暗部课程',
       priceYuan: 29,
       productType: 'course',
-      status: 'coming_soon',
+      status: 'active',
       categoryId: 'courses',
-      description: '素材到位后配置视频与一次性卡密'
+      description: '31 个视频、封面选集、在线播放、单课评论与下载'
     },
     bundle: {
       id: 'bundle',
@@ -49,7 +58,7 @@ export const CATALOG = {
       productType: 'course',
       status: 'presale',
       categoryId: 'courses',
-      description: '超影课程权益加暗部课程权益'
+      description: '超影课程 18 节加暗部课程 31 节'
     }
   },
   series: {
@@ -62,8 +71,8 @@ export const CATALOG = {
     anbu: {
       id: 'anbu',
       title: '暗部课程',
-      status: 'coming_soon',
-      lessons: []
+      status: 'active',
+      lessons: anbuLessons
     }
   },
   categories: [

@@ -16,8 +16,10 @@ import {
   deleteExpiredRateLimits,
   findCommentById,
   findCommentWithAuthorById,
+  findLessonForComment,
   insertComment,
   listCommentsForAdmin,
+  listVisibleCommentsForLesson,
   listVisibleCommentsForProduct,
   productExists,
   type CommentWithAuthorRow
@@ -59,6 +61,7 @@ export function toCommentPayload(row: CommentWithAuthorRow, now = Date.now()): C
   return {
     id: row.id,
     productId: row.product_id,
+    lessonId: row.lesson_id,
     body: row.body,
     status: row.status,
     author: {
@@ -99,11 +102,32 @@ export async function getProductComments(
   };
 }
 
+export async function getLessonComments(
+  env: Env,
+  lessonId: string,
+  viewerUserId: string | null
+): Promise<CommentsResponse> {
+  const lesson = await findLessonForComment(env.DB, lessonId);
+  if (!lesson) {
+    throw new ApiError('lesson_not_found', 'Lesson not found', 404);
+  }
+
+  const now = Date.now();
+  const viewer = viewerUserId ? await findUserById(env.DB, viewerUserId) : null;
+  const rows = await listVisibleCommentsForLesson(env.DB, lessonId, viewerUserId, now);
+  return {
+    comments: rows.map((row) => toCommentPayload(row, now)),
+    canComment: viewer !== null,
+    currentStatus: viewerStatus(viewer, now)
+  };
+}
+
 export async function createComment(
   env: Env,
   userId: string,
   productId: string,
-  body: string
+  body: string,
+  lessonId: string | null = null
 ): Promise<Comment> {
   if (!(await productExists(env.DB, productId))) {
     throw new ApiError('product_not_found', 'Product not found', 404);
@@ -140,6 +164,7 @@ export async function createComment(
   const created = await insertComment(env.DB, {
     id: crypto.randomUUID(),
     productId,
+    lessonId,
     userId,
     body,
     status,
@@ -148,6 +173,19 @@ export async function createComment(
     updatedAt: now
   });
   return toCommentPayload(created, now);
+}
+
+export async function createLessonComment(
+  env: Env,
+  userId: string,
+  lessonId: string,
+  body: string
+): Promise<Comment> {
+  const lesson = await findLessonForComment(env.DB, lessonId);
+  if (!lesson) {
+    throw new ApiError('lesson_not_found', 'Lesson not found', 404);
+  }
+  return createComment(env, userId, lesson.series_id, body, lesson.id);
 }
 
 export async function listAdminComments(
@@ -226,7 +264,7 @@ export async function reviewComment(
     body: decision === 'approve'
       ? `你的评论「${comment.body.slice(0, 40)}」已经公开显示`
       : `你的评论「${comment.body.slice(0, 40)}」未通过：${reason ?? '不符合要求'}`,
-    link: '/courses/fire-shadow'
+    link: comment.lesson_id ? `/learn/${comment.product_id}/${comment.lesson_id}` : '/courses/fire-shadow'
   });
 
   return toCommentPayload(reviewed, now);

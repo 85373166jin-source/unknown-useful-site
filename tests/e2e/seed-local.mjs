@@ -87,23 +87,25 @@ function buildSeedSql(adminHash) {
       `INSERT INTO products (id, title, price_yuan, price_cents, product_type, status, category_id, sort_order, description, created_at, updated_at) VALUES (${sqlQuote(id)}, ${sqlQuote(title)}, ${priceYuan}, ${priceCents}, ${sqlQuote(productType)}, ${sqlQuote(status)}, ${sqlQuote(categoryId)}, ${sortOrder}, ${sqlQuote(description)}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, price_yuan = excluded.price_yuan, price_cents = excluded.price_cents, product_type = excluded.product_type, status = excluded.status, category_id = excluded.category_id, sort_order = excluded.sort_order, description = excluded.description, updated_at = excluded.updated_at;`
     );
   };
-  insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '9 个视频、在线播放、下载、进度同步');
+  insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '18 个视频、封面选集、在线播放、单课评论与下载');
   insertProduct('bundle', '火影合集', 49, 'presale', 'courses', 2, '超影课程权益加暗部课程权益');
-  insertProduct('anbu', '暗部课程', 29, 'coming_soon', 'courses', 3, '素材到位后配置视频与一次性卡密');
+  insertProduct('anbu', '暗部课程', 29, 'active', 'courses', 3, '31 个视频、封面选集、在线播放、单课评论与下载');
   insertProduct('vip_monthly', 'VIP 会员', 10, 'active', 'memberships', 4, 'VIP 会员 30 天', 990, 'membership');
   insertProduct('svip_monthly', 'SVIP 豪华会员', 20, 'active', 'memberships', 5, 'SVIP 豪华会员 30 天', 1990, 'membership');
   lines.push(
     `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('super', '超影课程', 'active', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
   );
   lines.push(
-    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'coming_soon', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
+    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'active', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
   );
 
-  for (let order = 1; order <= 9; order += 1) {
-    const padded = String(order).padStart(2, '0');
-    lines.push(
-      `INSERT INTO lessons (id, series_id, title, media_path, sort_order, created_at, updated_at) VALUES (${sqlQuote(`super-${padded}`)}, 'super', ${sqlQuote(`第 ${order} 课`)}, ${sqlQuote(`/media/super-shadow/${order}.mp4`)}, ${order}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET series_id = excluded.series_id, title = excluded.title, media_path = excluded.media_path, sort_order = excluded.sort_order, updated_at = excluded.updated_at;`
-    );
+  for (const item of [{ id: 'super', count: 18 }, { id: 'anbu', count: 31 }]) {
+    for (let order = 1; order <= item.count; order += 1) {
+      const padded = String(order).padStart(2, '0');
+      lines.push(
+        `INSERT INTO lessons (id, series_id, title, media_path, sort_order, created_at, updated_at) VALUES (${sqlQuote(`${item.id}-${padded}`)}, ${sqlQuote(item.id)}, ${sqlQuote(`第 ${order} 课`)}, ${sqlQuote(`/api/v1/course-media/${item.id}-${padded}.mp4`)}, ${order}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET series_id = excluded.series_id, title = excluded.title, media_path = excluded.media_path, sort_order = excluded.sort_order, updated_at = excluded.updated_at;`
+      );
+    }
   }
 
   for (const child of ['super', 'anbu']) {

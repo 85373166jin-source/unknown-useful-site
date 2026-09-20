@@ -34,6 +34,7 @@ export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
 export const CommentSchema = z.object({
   id: z.string().min(1),
   productId: z.string().min(1),
+  lessonId: z.string().nullable(),
   body: z.string().min(1).max(COMMENT_BODY_MAX_LENGTH),
   status: CommentStatusSchema,
   author: CommentAuthorSchema,

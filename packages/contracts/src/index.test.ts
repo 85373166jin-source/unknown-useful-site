@@ -9,13 +9,16 @@ describe('catalog contracts', () => {
     expect(CATALOG.products.bundle.status).toBe('presale');
   });
 
-  it('contains nine super course lessons', () => {
-    expect(CATALOG.series.super.lessons).toHaveLength(9);
+  it('contains the complete super and anbu course catalogs', () => {
+    expect(CATALOG.series.super.lessons).toHaveLength(18);
+    expect(CATALOG.series.anbu.lessons).toHaveLength(31);
     expect(CATALOG.series.super.lessons[0]).toMatchObject({
       id: 'super-01',
       title: '第 1 课',
-      mediaPath: '/media/super-shadow/1.mp4'
+      coverPath: '/media/covers/super-01.jpg'
     });
+    expect(CATALOG.series.super.lessons[0]?.mediaPath).toContain('/super-01.mp4');
+    expect(CATALOG.series.anbu.lessons[30]?.mediaPath).toContain('/anbu-31.mp4');
   });
 
   it('rejects an invalid product price', () => {

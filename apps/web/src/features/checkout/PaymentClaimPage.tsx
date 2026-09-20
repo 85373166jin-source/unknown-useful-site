@@ -20,7 +20,6 @@ interface ProductQuote {
 
 const COURSE_PRODUCTS: ClaimableProduct[] = (Object.keys(CATALOG.products) as CourseProductId[])
   .map((id) => CATALOG.products[id])
-  .filter((product) => product.status !== 'coming_soon')
   .map((product) => ({
     id: product.id,
     title: product.title,

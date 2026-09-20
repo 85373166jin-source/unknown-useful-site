@@ -26,7 +26,10 @@ if (-not $SeedToken) {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $apiDir = Join-Path $repoRoot 'apps\api'
-$wrangler = Join-Path $repoRoot 'node_modules\.bin\wrangler.cmd'
+$wrangler = Join-Path $apiDir 'node_modules\.bin\wrangler.cmd'
+if (-not (Test-Path -LiteralPath $wrangler)) {
+  $wrangler = Join-Path $repoRoot 'node_modules\.bin\wrangler.cmd'
+}
 
 if (-not (Test-Path -LiteralPath $wrangler)) {
   throw "wrangler.cmd was not found at $wrangler. Run npm install first."

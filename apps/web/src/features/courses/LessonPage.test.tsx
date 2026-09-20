@@ -97,7 +97,7 @@ afterEach(() => {
 });
 
 describe('LessonPage', () => {
-  it('renders a download anchor using BASE_URL plus the lesson media path', async () => {
+  it('renders the cover, lesson comments, and the single-lesson download link', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => jsonResponse({ positionSeconds: 0, durationSeconds: 0, completed: false }))
@@ -106,10 +106,12 @@ describe('LessonPage', () => {
     renderLesson();
 
     expect(await screen.findByText('第 1 课')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '下载视频' })).toHaveAttribute(
+    expect(getVideo().getAttribute('poster')).toBe('/media/covers/super-01.jpg');
+    expect(screen.getByRole('link', { name: '下载本节课视频' })).toHaveAttribute(
       'href',
-      '/media/super-shadow/1.mp4'
+      'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-01.mp4'
     );
+    expect(screen.getByRole('heading', { name: '第 1 课评论' })).toBeInTheDocument();
   });
 
   it('resumes from the saved position when it is below 95 percent', async () => {

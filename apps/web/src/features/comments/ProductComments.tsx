@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/auth-context';
 
 export interface ProductCommentsProps {
   productId: string;
+  lessonId?: string;
   title?: string;
 }
 
@@ -23,7 +24,7 @@ function membershipBadgeLabel(comment: Comment): string | null {
   return null;
 }
 
-export function ProductComments({ productId, title }: ProductCommentsProps) {
+export function ProductComments({ productId, lessonId, title }: ProductCommentsProps) {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -36,13 +37,16 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
 
   const returnTo = `${location.pathname}${location.search}`;
   const userId = user?.id ?? null;
+  const commentsPath = lessonId
+    ? `/lessons/${encodeURIComponent(lessonId)}/comments`
+    : `/products/${encodeURIComponent(productId)}/comments`;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    apiFetch<CommentsResponse>(`/products/${productId}/comments`)
+    apiFetch<CommentsResponse>(commentsPath)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -68,7 +72,7 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
     };
     // Refetch whenever the viewer changes (login, logout, or an expired session) so
     // a stale 401 does not leave the page stuck in an error state.
-  }, [productId, userId]);
+  }, [commentsPath, userId]);
 
   async function submitComment(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -82,7 +86,7 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
     setNotice(null);
     setSubmitting(true);
     try {
-      const created = await apiFetch<Comment>(`/products/${productId}/comments`, {
+      const created = await apiFetch<Comment>(commentsPath, {
         method: 'POST',
         body: { body: trimmed }
       });
@@ -129,9 +133,9 @@ export function ProductComments({ productId, title }: ProductCommentsProps) {
       {authLoading || loading ? null : user || canComment ? (
         <form className="form comments__form" onSubmit={submitComment}>
           <div className="field">
-            <label htmlFor={`comment-body-${productId}`}>评论内容</label>
+            <label htmlFor={`comment-body-${lessonId ?? productId}`}>评论内容</label>
             <textarea
-              id={`comment-body-${productId}`}
+              id={`comment-body-${lessonId ?? productId}`}
               value={body}
               maxLength={COMMENT_BODY_MAX_LENGTH}
               rows={3}

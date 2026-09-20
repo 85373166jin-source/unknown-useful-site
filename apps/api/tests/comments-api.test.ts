@@ -12,6 +12,7 @@ type CommentStatus = 'pending' | 'public' | 'rejected' | 'author_only';
 type CommentPayload = {
   id: string;
   productId: string;
+  lessonId: string | null;
   body: string;
   status: CommentStatus;
   author: {
@@ -58,6 +59,20 @@ async function seedProduct(productId = 'super', productType = 'course'): Promise
   )
     .bind(productId, productId, productType, now, now)
     .run();
+}
+
+async function seedLesson(): Promise<void> {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at)
+       VALUES ('super', '超影课程', 'active', 'card-key-only', ?, ?)`
+    ).bind(now, now),
+    env.DB.prepare(
+      `INSERT INTO lessons (id, series_id, title, media_path, sort_order, created_at, updated_at)
+       VALUES ('super-01', 'super', '第 1 课', '/media/super-01.mp4', 1, ?, ?)`
+    ).bind(now, now)
+  ]);
 }
 
 async function registerUser(username: string): Promise<{ token: string; userId: string }> {
@@ -137,6 +152,7 @@ async function postComment(
 interface InsertCommentInput {
   id: string;
   productId?: string;
+  lessonId?: string | null;
   userId: string;
   body?: string;
   status: CommentStatus;
@@ -149,12 +165,13 @@ async function insertComment(input: InsertCommentInput): Promise<void> {
   const createdAt = input.createdAt ?? Date.now();
   await env.DB.prepare(
     `INSERT INTO comments
-      (id, product_id, user_id, body, status, rejection_reason, visible_until, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (id, product_id, lesson_id, user_id, body, status, rejection_reason, visible_until, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       input.id,
       input.productId ?? 'super',
+      input.lessonId ?? null,
       input.userId,
       input.body ?? `body-${input.id}`,
       input.status,
@@ -402,6 +419,39 @@ describe('comments API', () => {
       401,
       'unauthorized'
     );
+  });
+
+  it('keeps comments isolated to each lesson', async () => {
+    const alice = await registerUser('alice');
+    await seedLesson();
+
+    const created = await app.request(
+      '/api/v1/lessons/super-01/comments',
+      {
+        method: 'POST',
+        headers: jsonAuthHeaders(alice.token),
+        body: JSON.stringify({ body: '第一课评论' })
+      },
+      env
+    );
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toMatchObject({
+      productId: 'super',
+      lessonId: 'super-01',
+      body: '第一课评论'
+    });
+
+    const lessonComments = await app.request(
+      '/api/v1/lessons/super-01/comments',
+      { headers: authHeaders(alice.token) },
+      env
+    );
+    await expect(lessonComments.json()).resolves.toMatchObject({
+      comments: [{ lessonId: 'super-01', body: '第一课评论' }]
+    });
+
+    const productComments = await app.request('/api/v1/products/super/comments', {}, env);
+    await expect(productComments.json()).resolves.toMatchObject({ comments: [] });
   });
 });
 

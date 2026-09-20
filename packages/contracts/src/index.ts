@@ -36,7 +36,11 @@ export type Product = z.infer<typeof ProductSchema>;
 export const LessonSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  mediaPath: z.string().startsWith('/'),
+  mediaPath: z.string().refine(
+    (value) => value.startsWith('/') || value.startsWith('https://'),
+    'Media path must be a local path or HTTPS URL'
+  ),
+  coverPath: z.string().startsWith('/'),
   order: z.number().int().positive()
 });
 export type Lesson = z.infer<typeof LessonSchema>;

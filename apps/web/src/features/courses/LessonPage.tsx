@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { CATALOG, type Lesson } from '@site/contracts';
-import { ApiError, apiFetch, getSessionToken } from '../../lib/api';
+import { ApiError, apiFetch, apiUrl, getSessionToken } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { ProductComments } from '../comments/ProductComments';
 
 const SAVE_INTERVAL_MS = 120_000;
 const RESUME_RATIO = 0.95;
@@ -309,7 +310,10 @@ export function LessonPage() {
     );
   }
 
-  const mediaUrl = `${import.meta.env.BASE_URL}${lesson.mediaPath.replace(/^\//, '')}`;
+  const mediaUrl = /^https?:\/\//.test(lesson.mediaPath)
+    ? lesson.mediaPath
+    : apiUrl(lesson.mediaPath);
+  const coverUrl = `${import.meta.env.BASE_URL}${lesson.coverPath.replace(/^\//, '')}`;
 
   return (
     <section className="lesson-page">
@@ -323,14 +327,21 @@ export function LessonPage() {
         controls
         preload="metadata"
         src={mediaUrl}
+        poster={coverUrl}
         aria-label="课程视频"
       />
 
       <div className="lesson-page__actions">
         <a href={mediaUrl} download={lesson.title}>
-          下载视频
+          下载本节课视频
         </a>
       </div>
+
+      <ProductComments
+        productId={params.seriesId ?? lesson.id.split('-')[0] ?? 'super'}
+        lessonId={lesson.id}
+        title={`${lesson.title}评论`}
+      />
     </section>
   );
 }

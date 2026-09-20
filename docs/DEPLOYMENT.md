@@ -22,7 +22,8 @@ new frontend is published:
    `apps/api/migrations/0008_subsites.sql` (sub-sites),
    `apps/api/migrations/0009_contributions_wallet.sql` (contributions, earnings, withdrawals),
    `apps/api/migrations/0010_settlement.sql` (promo attribution and settlement details),
-   and `apps/api/migrations/0011_user_avatar.sql` (optional profile avatars).
+   `apps/api/migrations/0011_user_avatar.sql` (optional profile avatars),
+   and `apps/api/migrations/0012_lesson_comments.sql` (per-lesson comments).
 3. Deploy the Worker with `npm run deploy:api` and verify `/api/v1/health`.
 4. Only then push the Pages build. Publishing Pages before the matching Worker
    makes the new comment UI call endpoints that do not exist yet.
@@ -147,7 +148,8 @@ adds four sub-site tiers; `0009_contributions_wallet.sql` adds contributions,
 permissions, notifications, earnings, and withdrawals; `0010_settlement.sql` adds
 promo-code attribution and immutable settlement fields. `0011_user_avatar.sql`
 adds the optional avatar KV key. Apply all pending migrations before deploying
-the matching frontend and Worker.
+the matching frontend and Worker. `0012_lesson_comments.sql` scopes new comments
+to a specific lesson while preserving legacy product comments.
 
 ### Seeding
 Local development seeds through `npm run db:seed:local --workspace @site/api`,
@@ -172,6 +174,14 @@ id = "<KV_NAMESPACE_ID>"
 ```
 
 Payment screenshots are written to the private Workers KV namespace and are served only through the authenticated admin endpoint. Never expose raw KV keys to public clients.
+
+### Course media
+
+Full course videos are stored as GitHub Release assets under the
+`course-videos-20260920` tag instead of the Pages artifact. Individual lessons
+stream from `super-NN.mp4` / `anbu-NN.mp4`; the two complete download buttons use
+`超影系列备份.zip` and `暗部系列备份.zip`. Course covers remain in the Pages build
+under `apps/web/public/media/covers`.
 
 ## Secrets
 

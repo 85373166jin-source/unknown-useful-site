@@ -32,6 +32,7 @@ function comment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 'c-1',
     productId: 'super',
+    lessonId: null,
     body: '默认评论内容',
     status: 'public',
     author: {

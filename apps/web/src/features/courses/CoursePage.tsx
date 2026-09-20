@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CATALOG, type Series } from '@site/contracts';
-import { ProductComments } from '../comments/ProductComments';
 import { ApiError, apiFetch, getSessionToken } from '../../lib/api';
 
 type SeriesId = Series['id'];
@@ -16,6 +15,10 @@ interface UnlockPayload {
 }
 
 const SERIES_LIST = Object.values(CATALOG.series) as Series[];
+const COURSE_ARCHIVE_URLS: Record<SeriesId, string> = {
+  super: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-course-18.zip',
+  anbu: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/anbu-course-31.zip'
+};
 
 interface SeriesViewState {
   label: string;
@@ -40,6 +43,7 @@ export function CoursePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getSessionToken()) {
@@ -86,9 +90,7 @@ export function CoursePage() {
 
   async function submitUnlock(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!activeSeries) {
-      return;
-    }
+    if (!activeSeries) return;
 
     setError(null);
     setNotice(null);
@@ -108,18 +110,53 @@ export function CoursePage() {
     }
   }
 
+  async function downloadAllCourses(): Promise<void> {
+    const selectedSeries = SERIES_LIST.filter((series) => unlocked.includes(series.id));
+    if (selectedSeries.length === 0) return;
+    setError(null);
+    setNotice(null);
+    try {
+      for (const series of selectedSeries) {
+        setDownloadProgress(`正在下载 ${series.title}备份.zip`);
+        const link = document.createElement('a');
+        link.href = COURSE_ARCHIVE_URLS[series.id];
+        link.download = `${series.title}备份.zip`;
+        link.rel = 'noopener';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      }
+      setNotice('已开始下载全部课程压缩包，解压后会得到超影和暗部两个文件夹');
+      setDownloadProgress('全部课程压缩包已开始下载');
+    } catch (caught) {
+      setDownloadProgress(null);
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setError(caught instanceof Error ? caught.message : '批量下载失败');
+    }
+  }
+
   return (
     <section className="course-page">
       <header className="course-page__header">
-        <h1>火影课程</h1>
-        <p className="course-page__intro">超影课程与暗部课程，使用卡密或购买后永久绑定当前账号</p>
+        <div>
+          <h1>火影课程</h1>
+          <p className="course-page__intro">超影课程 18 节、暗部课程 31 节，点击封面即可播放对应视频</p>
+        </div>
+        {unlocked.length > 0 ? (
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={Boolean(downloadProgress?.startsWith('正在下载'))}
+            onClick={() => void downloadAllCourses()}
+          >
+            下载全部课程
+          </button>
+        ) : null}
       </header>
 
-      {notice ? (
-        <div className="alert alert--success" role="status">
-          {notice}
-        </div>
-      ) : null}
+      {notice ? <div className="alert alert--success" role="status">{notice}</div> : null}
+      {downloadProgress ? <div className="alert alert--success" role="status">{downloadProgress}</div> : null}
 
       <div className="course-series-list">
         {SERIES_LIST.map((series) => {
@@ -130,9 +167,7 @@ export function CoursePage() {
                 <h2>{series.title}</h2>
                 <span className="course-series__badge">{state.label}</span>
               </div>
-              <p className="course-series__meta">
-                {series.lessons.length > 0 ? `${series.lessons.length} 个视频` : '课程筹备中'}
-              </p>
+              <p className="course-series__meta">{series.lessons.length} 个视频</p>
               {state.actions ? (
                 <div className="course-series__actions">
                   <button
@@ -155,11 +190,7 @@ export function CoursePage() {
                   aria-label={`${series.title}卡密兑换`}
                   onSubmit={submitUnlock}
                 >
-                  {error ? (
-                    <div className="alert alert--error" role="alert">
-                      {error}
-                    </div>
-                  ) : null}
+                  {error ? <div className="alert alert--error" role="alert">{error}</div> : null}
                   <div className="field">
                     <label htmlFor={`course-card-code-${series.id}`}>卡密</label>
                     <input
@@ -173,20 +204,29 @@ export function CoursePage() {
                     />
                   </div>
                   <div className="course-unlock__actions">
-                    <button type="button" onClick={closeUnlock} disabled={submitting}>
-                      取消
-                    </button>
-                    <button type="submit" className="button button--primary" disabled={submitting}>
-                      确认解锁
-                    </button>
+                    <button type="button" onClick={closeUnlock} disabled={submitting}>取消</button>
+                    <button type="submit" className="button button--primary" disabled={submitting}>确认解锁</button>
                   </div>
                 </form>
               ) : null}
-              {unlocked.includes(series.id) && series.lessons.length > 0 ? (
-                <div className="course-series__lessons">
+              {unlocked.includes(series.id) ? (
+                <div className="course-lesson-grid">
                   {series.lessons.map((lesson) => (
-                    <Link key={lesson.id} to={`/learn/${series.id}/${lesson.id}`}>
-                      {lesson.title}
+                    <Link
+                      key={lesson.id}
+                      className="course-lesson-card"
+                      to={`/learn/${series.id}/${lesson.id}`}
+                      aria-label={`播放 ${lesson.title}`}
+                    >
+                      <span className="course-lesson-card__cover">
+                        <img
+                          src={`${import.meta.env.BASE_URL}${lesson.coverPath.replace(/^\//, '')}`}
+                          alt={`${lesson.title}封面`}
+                          loading="lazy"
+                        />
+                        <span className="course-lesson-card__play" aria-hidden="true">▶</span>
+                      </span>
+                      <strong>{lesson.title}</strong>
                     </Link>
                   ))}
                 </div>
@@ -194,11 +234,6 @@ export function CoursePage() {
             </article>
           );
         })}
-      </div>
-
-      <div className="course-comments">
-        <ProductComments productId="super" title="超影课程评论" />
-        <ProductComments productId="anbu" title="暗部课程评论" />
       </div>
     </section>
   );

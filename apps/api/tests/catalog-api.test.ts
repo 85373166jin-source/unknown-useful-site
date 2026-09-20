@@ -15,7 +15,7 @@ describe('catalog API', () => {
 
     expect(body.products.map((p) => p.id)).toEqual(['super', 'bundle', 'anbu']);
     expect(body.products.find((p) => p.id === 'super')?.priceYuan).toBe(29);
-    expect(body.products.find((p) => p.id === 'anbu')?.status).toBe('coming_soon');
+    expect(body.products.find((p) => p.id === 'anbu')?.status).toBe('active');
     expect(body.products.find((p) => p.id === 'bundle')?.status).toBe('presale');
     expect(body.categories.map((c) => c.title)).toEqual([
       '全部资源',

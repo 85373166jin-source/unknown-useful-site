@@ -14,6 +14,7 @@ function comment(overrides: Partial<Comment> = {}): Comment {
   return {
     id: 'c-1',
     productId: 'super',
+    lessonId: null,
     body: '待审核评论内容',
     status: 'pending',
     author: {
