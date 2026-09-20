@@ -106,7 +106,7 @@ describe('LessonPage', () => {
     renderLesson();
 
     expect(await screen.findByText('第 1 课')).toBeInTheDocument();
-    expect(getVideo().getAttribute('poster')).toBe('/media/covers/super-01.jpg');
+    expect(getVideo().getAttribute('poster')).toBe('/media/covers/super-01.webp');
     expect(screen.getByRole('link', { name: '下载本节课视频' })).toHaveAttribute(
       'href',
       'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-01.mp4'

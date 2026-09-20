@@ -43,7 +43,7 @@ describe('CoursePage', () => {
     expect(firstLesson).toHaveAttribute('href', '/learn/super/super-01');
     expect(within(firstLesson).getByRole('img', { name: '第 1 课封面' })).toHaveAttribute(
       'src',
-      '/media/covers/super-01.jpg'
+      '/media/covers/super-01.webp'
     );
 
     const darkCourse = screen.getByText('暗部课程').closest('article')!;

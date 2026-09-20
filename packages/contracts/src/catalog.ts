@@ -22,7 +22,7 @@ function buildLessons(seriesId: 'super' | 'anbu', count: number): Lesson[] {
       id: `${seriesId}-${padded}`,
       title: `第 ${order} 课`,
       mediaPath: `${COURSE_RELEASE_BASE}/${seriesId}-${padded}.mp4`,
-      coverPath: `/media/covers/${seriesId}-${padded}.jpg`,
+      coverPath: `/media/covers/${seriesId}-${padded}.webp`,
       order
     };
   });

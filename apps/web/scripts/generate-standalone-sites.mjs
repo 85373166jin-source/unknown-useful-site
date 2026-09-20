@@ -32,7 +32,7 @@ function renderLessonButton(seriesId, lessonNumber) {
   const lessonId = `${seriesId}-${String(lessonNumber).padStart(2, '0')}`;
   const title = `第 ${lessonNumber} 课`;
   const videoUrl = `${releaseBase}/${lessonId}.mp4`;
-  const coverUrl = `../media/covers/${lessonId}.jpg`;
+  const coverUrl = `../media/covers/${lessonId}.webp`;
   return `<button class="lesson" type="button" aria-label="播放 ${escapeHtml(title)}" data-lesson="${escapeHtml(title)}" data-video="${videoUrl}" data-cover="${coverUrl}" data-download="${videoUrl}">
   <span class="lesson-cover"><img src="${coverUrl}" alt="${escapeHtml(title)}封面" loading="lazy"><span aria-hidden="true">▶</span></span>
   <strong>${escapeHtml(title)}</strong>
@@ -85,7 +85,7 @@ function renderPage(seriesId) {
       <div class="player-stage">
         <video id="player" controls preload="none" aria-label="课程视频"></video>
         <button class="player-cover" id="player-cover" type="button" aria-label="播放第 1 课">
-          <img id="player-cover-image" src="${firstCover}" alt="第 1 课封面">
+          <img id="player-cover-image" src="${firstCover}" alt="第 1 课封面" fetchpriority="high">
           <span aria-hidden="true">▶</span>
         </button>
       </div>
