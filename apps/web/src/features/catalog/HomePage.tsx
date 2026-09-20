@@ -7,8 +7,8 @@ const RESOURCES: Resource[] = [
   {
     id: 'fire-shadow',
     title: '火影课程',
-    description: '超影 18 节、暗部 31 节，无需登录即可播放和下载',
-    badge: '课程限时免费',
+    description: '超影课程与暗部课程，合集支持预售',
+    badge: '已上线',
     href: '/courses/fire-shadow'
   },
   {

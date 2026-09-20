@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { CATALOG, type Lesson } from '@site/contracts';
 import { ApiError, apiFetch, apiUrl, getSessionToken } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -212,7 +212,7 @@ export function LessonPage() {
 
   useEffect(() => {
     savedProgressRef.current = null;
-    if (!lesson || !user) {
+    if (!lesson) {
       return;
     }
 
@@ -234,7 +234,7 @@ export function LessonPage() {
     return () => {
       cancelled = true;
     };
-  }, [lesson, user, applyResume]);
+  }, [lesson, applyResume]);
 
   useEffect(() => {
     void flushQueue();
@@ -337,20 +337,11 @@ export function LessonPage() {
         </a>
       </div>
 
-      {user ? (
-        <ProductComments
-          productId={params.seriesId ?? lesson.id.split('-')[0] ?? 'super'}
-          lessonId={lesson.id}
-          title={`${lesson.title}评论`}
-        />
-      ) : (
-        <section className="comments">
-          <h2 className="comments__title">{lesson.title}评论</h2>
-          <p className="comments__login">
-            <Link to="/login">登录后可发表评论</Link>
-          </p>
-        </section>
-      )}
+      <ProductComments
+        productId={params.seriesId ?? lesson.id.split('-')[0] ?? 'super'}
+        lessonId={lesson.id}
+        title={`${lesson.title}评论`}
+      />
     </section>
   );
 }

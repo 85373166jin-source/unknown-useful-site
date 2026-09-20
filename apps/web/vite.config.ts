@@ -24,7 +24,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        admin: fileURLToPath(new URL('./admin/index.html', import.meta.url))
+        admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
+        super: fileURLToPath(new URL('./super/index.html', import.meta.url)),
+        anbu: fileURLToPath(new URL('./anbu/index.html', import.meta.url))
       }
     }
   }

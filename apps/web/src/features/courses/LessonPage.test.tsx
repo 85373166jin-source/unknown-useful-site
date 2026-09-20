@@ -60,7 +60,7 @@ function LessonHarness() {
 
 function renderLesson(
   initialEntries: string[] = ['/learn/super/super-01'],
-  user: AuthUser | null = TEST_USER_1
+  user: AuthUser = TEST_USER_1
 ) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -112,25 +112,6 @@ describe('LessonPage', () => {
       'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-01.mp4'
     );
     expect(screen.getByRole('heading', { name: '第 1 课评论' })).toBeInTheDocument();
-  });
-
-  it('plays and downloads a lesson for guests without calling the API', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    renderLesson(['/learn/super/super-01'], null);
-
-    expect(await screen.findByText('第 1 课')).toBeInTheDocument();
-    expect(getVideo()).toHaveAttribute(
-      'src',
-      'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-01.mp4'
-    );
-    expect(screen.getByRole('link', { name: '下载本节课视频' })).toHaveAttribute(
-      'href',
-      'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-01.mp4'
-    );
-    expect(screen.getByText('登录后可发表评论')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('resumes from the saved position when it is below 95 percent', async () => {
