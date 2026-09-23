@@ -2,6 +2,7 @@ export const PRODUCT_IDS = [
   'super',
   'anbu',
   'bundle',
+  'douyin',
   'vip_monthly',
   'svip_monthly',
   'partner_basic',

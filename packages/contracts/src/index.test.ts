@@ -9,6 +9,18 @@ describe('catalog contracts', () => {
     expect(CATALOG.products.bundle.status).toBe('presale');
   });
 
+  it('contains the new paid Douyin registration tutorial', () => {
+    expect(CATALOG.products.douyin).toMatchObject({
+      title: '无限注册抖音新号',
+      priceYuan: 19,
+      productType: 'digital',
+      status: 'active',
+      categoryId: 'digital'
+    });
+    expect(CATALOG.series.douyin.lessons).toHaveLength(2);
+    expect(CATALOG.series.douyin.lessons[0]?.mediaPath).toContain('/douyin-01.mp4');
+  });
+
   it('contains the complete super and anbu course catalogs', () => {
     expect(CATALOG.series.super.lessons).toHaveLength(18);
     expect(CATALOG.series.anbu.lessons).toHaveLength(31);

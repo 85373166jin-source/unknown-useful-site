@@ -7,7 +7,7 @@ export type Category = {
 
 export type Catalog = {
   products: Record<CourseProductId, Product>;
-  series: Record<'super' | 'anbu', Series>;
+  series: Record<'super' | 'anbu' | 'douyin', Series>;
   categories: readonly Category[];
 };
 
@@ -30,6 +30,26 @@ function buildLessons(seriesId: 'super' | 'anbu', count: number): Lesson[] {
 
 const superLessons = buildLessons('super', 18);
 const anbuLessons = buildLessons('anbu', 31);
+
+const DOUYIN_RELEASE_BASE =
+  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923';
+
+const douyinLessons: Lesson[] = [
+  {
+    id: 'douyin-01',
+    title: '完整注册流程',
+    mediaPath: `${DOUYIN_RELEASE_BASE}/douyin-01.mp4`,
+    coverPath: '/media/covers/douyin-01.webp',
+    order: 1
+  },
+  {
+    id: 'douyin-02',
+    title: '注意事项与补充',
+    mediaPath: `${DOUYIN_RELEASE_BASE}/douyin-02.mp4`,
+    coverPath: '/media/covers/douyin-02.webp',
+    order: 2
+  }
+];
 
 export const CATALOG = {
   products: {
@@ -59,6 +79,15 @@ export const CATALOG = {
       status: 'presale',
       categoryId: 'courses',
       description: '超影课程 18 节加暗部课程 31 节'
+    },
+    douyin: {
+      id: 'douyin',
+      title: '无限注册抖音新号',
+      priceYuan: 19,
+      productType: 'digital',
+      status: 'active',
+      categoryId: 'digital',
+      description: '2 个视频、完整注册流程、注意事项与下载'
     }
   },
   series: {
@@ -73,6 +102,12 @@ export const CATALOG = {
       title: '暗部课程',
       status: 'active',
       lessons: anbuLessons
+    },
+    douyin: {
+      id: 'douyin',
+      title: '无限注册抖音新号',
+      status: 'active',
+      lessons: douyinLessons
     }
   },
   categories: [

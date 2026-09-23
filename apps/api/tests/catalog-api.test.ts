@@ -13,7 +13,7 @@ describe('catalog API', () => {
       categories: Array<{ id: string; title: string }>;
     }>();
 
-    expect(body.products.map((p) => p.id)).toEqual(['super', 'bundle', 'anbu']);
+    expect(body.products.map((p) => p.id)).toEqual(['super', 'bundle', 'anbu', 'douyin']);
     expect(body.products.find((p) => p.id === 'super')?.priceYuan).toBe(29);
     expect(body.products.find((p) => p.id === 'anbu')?.status).toBe('active');
     expect(body.products.find((p) => p.id === 'bundle')?.status).toBe('presale');

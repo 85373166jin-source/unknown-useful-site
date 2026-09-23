@@ -8,7 +8,7 @@ export * from './products';
 export const ProductIdSchema = z.enum(PRODUCT_IDS);
 export type ProductId = SiteProductId;
 
-export const CourseProductIdSchema = z.enum(['super', 'anbu', 'bundle']);
+export const CourseProductIdSchema = z.enum(['super', 'anbu', 'bundle', 'douyin']);
 export type CourseProductId = z.infer<typeof CourseProductIdSchema>;
 
 export const ProductTypeSchema = z.enum([
@@ -46,7 +46,7 @@ export const LessonSchema = z.object({
 export type Lesson = z.infer<typeof LessonSchema>;
 
 export const SeriesSchema = z.object({
-  id: z.enum(['super', 'anbu']),
+  id: z.enum(['super', 'anbu', 'douyin']),
   title: z.string().min(1),
   status: z.enum(['active', 'coming_soon']),
   lessons: z.array(LessonSchema)

@@ -17,7 +17,8 @@ interface UnlockPayload {
 const SERIES_LIST = Object.values(CATALOG.series) as Series[];
 const COURSE_ARCHIVE_URLS: Record<SeriesId, string> = {
   super: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-course-18.zip',
-  anbu: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/anbu-course-31.zip'
+  anbu: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/anbu-course-31.zip',
+  douyin: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-tutorial-2.zip'
 };
 
 interface SeriesViewState {
@@ -127,7 +128,7 @@ export function CoursePage() {
         link.remove();
         await new Promise((resolve) => window.setTimeout(resolve, 1200));
       }
-      setNotice('已开始下载全部课程压缩包，解压后会得到超影和暗部两个文件夹');
+      setNotice('已开始下载全部视频压缩包，解压后会得到对应资源文件夹');
       setDownloadProgress('全部课程压缩包已开始下载');
     } catch (caught) {
       setDownloadProgress(null);
@@ -140,8 +141,8 @@ export function CoursePage() {
     <section className="course-page">
       <header className="course-page__header">
         <div>
-          <h1>火影课程</h1>
-          <p className="course-page__intro">超影课程 18 节、暗部课程 31 节，点击封面即可播放对应视频</p>
+          <h1>付费视频资源</h1>
+          <p className="course-page__intro">火影课程 49 节，另有无限注册抖音新号视频教程 2 节</p>
         </div>
         {unlocked.length > 0 ? (
           <button

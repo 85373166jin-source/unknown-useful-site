@@ -1,71 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const scriptDir = dirname(fileURLToPath(import.meta.url));
-const outputRoot = resolve(scriptDir, '..', 'public');
-const releaseBase =
-  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920';
-const resourceReleaseBase =
-  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923';
-
-const SERIES = {
-  super: {
-    title: '超影课程',
-    count: 18,
-    archive: `${releaseBase}/super-course-18.zip`
-  },
-  anbu: {
-    title: '暗部课程',
-    count: 31,
-    archive: `${releaseBase}/anbu-course-31.zip`
-  },
-  douyin: {
-    title: '无限注册抖音新号',
-    count: 2,
-    archive: `${resourceReleaseBase}/douyin-tutorial-2.zip`,
-    base: resourceReleaseBase,
-    lessonTitles: ['完整注册流程', '注意事项与补充']
-  }
-};
-
-function escapeHtml(value) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
-function renderLessonButton(seriesId, lessonNumber, title = `第 ${lessonNumber} 课`) {
-  const lessonId = `${seriesId}-${String(lessonNumber).padStart(2, '0')}`;
-  const videoUrl = `${SERIES[seriesId].base ?? releaseBase}/${lessonId}.mp4`;
-  const coverUrl = `../media/covers/${lessonId}.webp`;
-  return `<button class="lesson" type="button" aria-label="播放 ${escapeHtml(title)}" data-lesson="${escapeHtml(title)}" data-video="${videoUrl}" data-cover="${coverUrl}" data-download="${videoUrl}">
-  <span class="lesson-cover"><img src="${coverUrl}" alt="${escapeHtml(title)}封面" loading="lazy"><span aria-hidden="true">▶</span></span>
-  <strong>${escapeHtml(title)}</strong>
-</button>`;
-}
-
-function renderPage(seriesId) {
-  const series = SERIES[seriesId];
-  if (!series) {
-    throw new Error(`Unknown series: ${seriesId}`);
-  }
-
-  const lessons = Array.from({ length: series.count }, (_, index) =>
-    renderLessonButton(seriesId, index + 1, series.lessonTitles?.[index])
-  ).join('\n');
-  const firstLessonId = `${seriesId}-01`;
-  const firstCover = `../media/covers/${firstLessonId}.webp`;
-
-  return `<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>${series.title}</title>
+  <title>无限注册抖音新号</title>
   <style>
     :root{color-scheme:light;--blue:#2f6fed;--text:#172033;--muted:#657089;--border:#dbe3f0;--surface:#fff;--bg:#f4f7fb;--shadow:0 10px 30px rgba(23,32,51,.08)}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.55}
@@ -83,30 +22,37 @@ function renderPage(seriesId) {
     <header class="header">
       <div>
         <p class="eyebrow">专属课程入口</p>
-        <h1>${series.title}</h1>
-        <p class="intro">共 ${series.count} 节，无需登录，点击目录即可播放和下载。</p>
+        <h1>无限注册抖音新号</h1>
+        <p class="intro">共 2 节，无需登录，点击目录即可播放和下载。</p>
       </div>
-      <a class="button" href="${series.archive}" download>下载全部课程</a>
+      <a class="button" href="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-tutorial-2.zip" download>下载全部课程</a>
     </header>
 
     <section class="player" aria-label="课程播放器">
       <div class="player-stage">
         <video id="player" controls preload="none" aria-label="课程视频"></video>
         <button class="player-cover" id="player-cover" type="button" aria-label="播放第 1 课">
-          <img id="player-cover-image" src="${firstCover}" alt="第 1 课封面" fetchpriority="high">
+          <img id="player-cover-image" src="../media/covers/douyin-01.webp" alt="第 1 课封面" fetchpriority="high">
           <span aria-hidden="true">▶</span>
         </button>
       </div>
       <div class="player-footer">
         <span class="player-hint" id="player-hint">请先选择一节课</span>
-        <a id="lesson-download" href="${series.base ?? releaseBase}/${firstLessonId}.mp4" download>下载本节课视频</a>
+        <a id="lesson-download" href="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-01.mp4" download>下载本节课视频</a>
       </div>
     </section>
 
     <section class="catalog" aria-label="课程目录">
       <h2>课程目录</h2>
       <div class="lesson-grid">
-${lessons}
+<button class="lesson" type="button" aria-label="播放 完整注册流程" data-lesson="完整注册流程" data-video="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-01.mp4" data-cover="../media/covers/douyin-01.webp" data-download="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-01.mp4">
+  <span class="lesson-cover"><img src="../media/covers/douyin-01.webp" alt="完整注册流程封面" loading="lazy"><span aria-hidden="true">▶</span></span>
+  <strong>完整注册流程</strong>
+</button>
+<button class="lesson" type="button" aria-label="播放 注意事项与补充" data-lesson="注意事项与补充" data-video="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-02.mp4" data-cover="../media/covers/douyin-02.webp" data-download="https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-02.mp4">
+  <span class="lesson-cover"><img src="../media/covers/douyin-02.webp" alt="注意事项与补充封面" loading="lazy"><span aria-hidden="true">▶</span></span>
+  <strong>注意事项与补充</strong>
+</button>
       </div>
     </section>
   </main>
@@ -145,11 +91,3 @@ ${lessons}
   </script>
 </body>
 </html>
-`;
-}
-
-for (const seriesId of Object.keys(SERIES)) {
-  const directory = resolve(outputRoot, seriesId);
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(resolve(directory, 'index.html'), renderPage(seriesId), 'utf8');
-}

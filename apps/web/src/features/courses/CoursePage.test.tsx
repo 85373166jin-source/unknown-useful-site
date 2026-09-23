@@ -24,13 +24,14 @@ function installEntitlements(unlocked: string[]): void {
 }
 
 describe('CoursePage', () => {
-  it('renders both active course series and the unlock/purchase actions', () => {
+  it('renders all paid video series and the unlock/purchase actions', () => {
     render(<CoursePage />, { wrapper: TestProviders });
 
     expect(screen.getByText('超影课程')).toBeInTheDocument();
     expect(screen.getByText('暗部课程')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '使用卡密观看' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: '购买课程' })).toHaveLength(2);
+    expect(screen.getByText('无限注册抖音新号')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '使用卡密观看' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: '购买课程' })).toHaveLength(3);
   });
 
   it('shows lesson covers for an entitled series and hides locked lessons', async () => {

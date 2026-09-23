@@ -90,6 +90,7 @@ function buildSeedSql(adminHash) {
   insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '18 个视频、封面选集、在线播放、单课评论与下载');
   insertProduct('bundle', '火影合集', 49, 'presale', 'courses', 2, '超影课程权益加暗部课程权益');
   insertProduct('anbu', '暗部课程', 29, 'active', 'courses', 3, '31 个视频、封面选集、在线播放、单课评论与下载');
+  insertProduct('douyin', '无限注册抖音新号', 19, 'active', 'digital', 4, '2 个视频、完整注册流程、注意事项与下载', 1900, 'digital');
   insertProduct('vip_monthly', 'VIP 会员', 10, 'active', 'memberships', 4, 'VIP 会员 30 天', 990, 'membership');
   insertProduct('svip_monthly', 'SVIP 豪华会员', 20, 'active', 'memberships', 5, 'SVIP 豪华会员 30 天', 1990, 'membership');
   lines.push(
@@ -97,6 +98,9 @@ function buildSeedSql(adminHash) {
   );
   lines.push(
     `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('anbu', '暗部课程', 'active', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
+  );
+  lines.push(
+    `INSERT INTO series (id, title, status, course_password_hash, created_at, updated_at) VALUES ('douyin', '无限注册抖音新号', 'active', 'card-key-only', ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, updated_at = excluded.updated_at;`
   );
 
   for (const item of [{ id: 'super', count: 18 }, { id: 'anbu', count: 31 }]) {
@@ -106,6 +110,15 @@ function buildSeedSql(adminHash) {
         `INSERT INTO lessons (id, series_id, title, media_path, sort_order, created_at, updated_at) VALUES (${sqlQuote(`${item.id}-${padded}`)}, ${sqlQuote(item.id)}, ${sqlQuote(`第 ${order} 课`)}, ${sqlQuote(`/api/v1/course-media/${item.id}-${padded}.mp4`)}, ${order}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET series_id = excluded.series_id, title = excluded.title, media_path = excluded.media_path, sort_order = excluded.sort_order, updated_at = excluded.updated_at;`
       );
     }
+  }
+
+  for (const lesson of [
+    { id: 'douyin-01', title: '完整注册流程', order: 1 },
+    { id: 'douyin-02', title: '注意事项与补充', order: 2 }
+  ]) {
+    lines.push(
+      `INSERT INTO lessons (id, series_id, title, media_path, sort_order, created_at, updated_at) VALUES (${sqlQuote(lesson.id)}, 'douyin', ${sqlQuote(lesson.title)}, ${sqlQuote(`/api/v1/course-media/${lesson.id}.mp4`)}, ${lesson.order}, ${now}, ${now}) ON CONFLICT(id) DO UPDATE SET series_id = excluded.series_id, title = excluded.title, media_path = excluded.media_path, sort_order = excluded.sort_order, updated_at = excluded.updated_at;`
+    );
   }
 
   for (const child of ['super', 'anbu']) {

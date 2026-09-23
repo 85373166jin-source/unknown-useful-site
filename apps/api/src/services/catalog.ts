@@ -3,7 +3,8 @@ import { CATALOG, type Category, type CourseProductId, type Product } from '@sit
 export const PRODUCT_SORT_ORDER: Record<CourseProductId, number> = {
   super: 1,
   bundle: 2,
-  anbu: 3
+  anbu: 3,
+  douyin: 4
 };
 
 export function listProducts(): Product[] {

@@ -12,6 +12,7 @@ const QUOTES: Record<string, { listAmountCents: number; actualAmountCents: numbe
   bundle: { listAmountCents: 4900, actualAmountCents: 4900 },
   super: { listAmountCents: 2900, actualAmountCents: 2320 },
   anbu: { listAmountCents: 2900, actualAmountCents: 2900 },
+  douyin: { listAmountCents: 1900, actualAmountCents: 1900 },
   vip_monthly: { listAmountCents: 990, actualAmountCents: 990 },
   svip_monthly: { listAmountCents: 1990, actualAmountCents: 1990 }
 };
@@ -106,6 +107,19 @@ describe('PaymentClaimPage', () => {
     expect(screen.getByLabelText('产品')).toHaveValue('anbu');
     expect(screen.getByRole('option', { name: /暗部课程/ })).toBeInTheDocument();
     expect(await screen.findByText((_, element) => element?.textContent === '当前标价：29.00 元')).toBeInTheDocument();
+  });
+
+  it('offers the Douyin registration tutorial for payment', async () => {
+    installFetch();
+    render(
+      <TestProviders initialEntries={['/payment-claim?productId=douyin']}>
+        <PaymentClaimPage />
+      </TestProviders>
+    );
+
+    expect(screen.getByLabelText('产品')).toHaveValue('douyin');
+    expect(screen.getByRole('option', { name: /无限注册抖音新号/ })).toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：19.00 元')).toBeInTheDocument();
   });
 
   it('shows the exact server quote before the user pays', async () => {
