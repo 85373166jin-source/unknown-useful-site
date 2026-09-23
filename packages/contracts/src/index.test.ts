@@ -12,7 +12,7 @@ describe('catalog contracts', () => {
   it('contains the new paid Douyin registration tutorial', () => {
     expect(CATALOG.products.douyin).toMatchObject({
       title: '无限注册抖音新号',
-      priceYuan: 19,
+      priceYuan: 66,
       productType: 'digital',
       status: 'active',
       categoryId: 'digital'

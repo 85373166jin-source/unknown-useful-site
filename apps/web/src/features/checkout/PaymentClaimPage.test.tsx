@@ -12,7 +12,7 @@ const QUOTES: Record<string, { listAmountCents: number; actualAmountCents: numbe
   bundle: { listAmountCents: 4900, actualAmountCents: 4900 },
   super: { listAmountCents: 2900, actualAmountCents: 2320 },
   anbu: { listAmountCents: 2900, actualAmountCents: 2900 },
-  douyin: { listAmountCents: 1900, actualAmountCents: 1900 },
+  douyin: { listAmountCents: 6600, actualAmountCents: 6600 },
   vip_monthly: { listAmountCents: 990, actualAmountCents: 990 },
   svip_monthly: { listAmountCents: 1990, actualAmountCents: 1990 }
 };
@@ -119,7 +119,7 @@ describe('PaymentClaimPage', () => {
 
     expect(screen.getByLabelText('产品')).toHaveValue('douyin');
     expect(screen.getByRole('option', { name: /无限注册抖音新号/ })).toBeInTheDocument();
-    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：19.00 元')).toBeInTheDocument();
+    expect(await screen.findByText((_, element) => element?.textContent === '当前标价：66.00 元')).toBeInTheDocument();
   });
 
   it('shows the exact server quote before the user pays', async () => {

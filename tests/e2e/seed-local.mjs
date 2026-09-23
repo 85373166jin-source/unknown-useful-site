@@ -90,7 +90,7 @@ function buildSeedSql(adminHash) {
   insertProduct('super', '超影课程', 29, 'active', 'courses', 1, '18 个视频、封面选集、在线播放、单课评论与下载');
   insertProduct('bundle', '火影合集', 49, 'presale', 'courses', 2, '超影课程权益加暗部课程权益');
   insertProduct('anbu', '暗部课程', 29, 'active', 'courses', 3, '31 个视频、封面选集、在线播放、单课评论与下载');
-  insertProduct('douyin', '无限注册抖音新号', 19, 'active', 'digital', 4, '2 个视频、完整注册流程、注意事项与下载', 1900, 'digital');
+  insertProduct('douyin', '无限注册抖音新号', 66, 'active', 'digital', 4, '2 个视频、完整注册流程、注意事项与下载', 6600, 'digital');
   insertProduct('vip_monthly', 'VIP 会员', 10, 'active', 'memberships', 4, 'VIP 会员 30 天', 990, 'membership');
   insertProduct('svip_monthly', 'SVIP 豪华会员', 20, 'active', 'memberships', 5, 'SVIP 豪华会员 30 天', 1990, 'membership');
   lines.push(

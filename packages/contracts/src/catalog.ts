@@ -83,7 +83,7 @@ export const CATALOG = {
     douyin: {
       id: 'douyin',
       title: '无限注册抖音新号',
-      priceYuan: 19,
+      priceYuan: 66,
       productType: 'digital',
       status: 'active',
       categoryId: 'digital',

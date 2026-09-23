@@ -15,7 +15,7 @@ const RESOURCES: Resource[] = [
     id: 'douyin',
     title: '无限注册抖音新号',
     description: '完整注册流程与注意事项，2 段视频教程',
-    badge: '19 元',
+    badge: '66 元',
     href: '/courses/fire-shadow'
   },
   {
