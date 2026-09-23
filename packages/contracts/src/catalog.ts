@@ -32,7 +32,7 @@ const superLessons = buildLessons('super', 18);
 const anbuLessons = buildLessons('anbu', 31);
 
 const DOUYIN_RELEASE_BASE =
-  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923';
+  'https://85373166jin-source.github.io/unknown-useful-site/media/videos';
 
 const douyinLessons: Lesson[] = [
   {

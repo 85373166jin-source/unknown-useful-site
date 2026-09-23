@@ -7,7 +7,7 @@ const outputRoot = resolve(scriptDir, '..', 'public');
 const releaseBase =
   'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920';
 const resourceReleaseBase =
-  'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923';
+  'https://85373166jin-source.github.io/unknown-useful-site/media/videos';
 
 const SERIES = {
   super: {
@@ -23,7 +23,6 @@ const SERIES = {
   douyin: {
     title: '无限注册抖音新号',
     count: 2,
-    archive: `${resourceReleaseBase}/douyin-tutorial-2.zip`,
     base: resourceReleaseBase,
     lessonTitles: ['完整注册流程', '注意事项与补充']
   }
@@ -86,7 +85,7 @@ function renderPage(seriesId) {
         <h1>${series.title}</h1>
         <p class="intro">共 ${series.count} 节，无需登录，点击目录即可播放和下载。</p>
       </div>
-      <a class="button" href="${series.archive}" download>下载全部课程</a>
+${series.archive ? `      <a class="button" href="${series.archive}" download>下载全部课程</a>` : ''}
     </header>
 
     <section class="player" aria-label="课程播放器">

@@ -15,10 +15,9 @@ interface UnlockPayload {
 }
 
 const SERIES_LIST = Object.values(CATALOG.series) as Series[];
-const COURSE_ARCHIVE_URLS: Record<SeriesId, string> = {
+const COURSE_ARCHIVE_URLS: Partial<Record<SeriesId, string>> = {
   super: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/super-course-18.zip',
-  anbu: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/anbu-course-31.zip',
-  douyin: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/resource-videos-20260923/douyin-tutorial-2.zip'
+  anbu: 'https://github.com/85373166jin-source/unknown-useful-site/releases/download/course-videos-20260920/anbu-course-31.zip'
 };
 
 interface SeriesViewState {
@@ -118,17 +117,24 @@ export function CoursePage() {
     setNotice(null);
     try {
       for (const series of selectedSeries) {
-        setDownloadProgress(`正在下载 ${series.title}备份.zip`);
-        const link = document.createElement('a');
-        link.href = COURSE_ARCHIVE_URLS[series.id];
-        link.download = `${series.title}备份.zip`;
-        link.rel = 'noopener';
-        document.body.append(link);
-        link.click();
-        link.remove();
-        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        setDownloadProgress(`正在下载 ${series.title}`);
+        const archiveUrl = COURSE_ARCHIVE_URLS[series.id];
+        const downloads = archiveUrl
+          ? [{ href: archiveUrl, name: `${series.title}备份.zip` }]
+          : series.lessons.map((lesson) => ({ href: lesson.mediaPath, name: `${lesson.title}.mp4` }));
+
+        for (const download of downloads) {
+          const link = document.createElement('a');
+          link.href = download.href;
+          link.download = download.name;
+          link.rel = 'noopener';
+          document.body.append(link);
+          link.click();
+          link.remove();
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+        }
       }
-      setNotice('已开始下载全部视频压缩包，解压后会得到对应资源文件夹');
+      setNotice('已开始下载全部视频');
       setDownloadProgress('全部课程压缩包已开始下载');
     } catch (caught) {
       setDownloadProgress(null);
